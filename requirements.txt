@@ -1,0 +1,1 @@
+requires: a C compiler (cc/gcc/clang) + Python 3.7+ (stdlib only)

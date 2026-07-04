@@ -1,0 +1,19 @@
+# copyrighted dumps — never commit these
+*.bin
+*.BIN
+*.nand
+GameCode*
+furby-nand*
+Furby-Files/
+dumps/
+
+# build artifacts
+*.so
+*.o
+*.dylib
+__pycache__/
+*.pyc
+
+# scratch
+*.png
+.DS_Store
