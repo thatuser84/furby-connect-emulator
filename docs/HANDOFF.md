@@ -601,3 +601,25 @@ Characterized why:
 The emulator already mounts + reads the real filesystem via the parsed FAT on the
 logical image, so this is a fidelity upgrade (firmware-driven vs pre-fixed image),
 not a functional blocker.
+
+### §17.1 — FTL cracked structurally + map table located (major update)
+
+Reversed the gpac800 FTL far enough to **reconstruct the logical image from the raw
+physical dump, byte-exact.** `tools/ftl_reconstruct.py` does it and validates.
+
+Proven, verifiable facts:
+- **Block model:** 32 pages / 16 KiB per block, **whole-block remap** (no sub-block
+  scrambling). Reconstruction is **6814/6814 mapped logical blocks byte-exact (100%)**.
+- **Local layout:** a 2-plane, 8-block interleave — logical offset climbs `+8` every 8
+  physical blocks (`log ≈ 16·(phys//8) + phys%8 + base`), with periodic zone resets and
+  bad-block skips.
+- **The FTL map table is located:** "system" blocks whose page-0 spare begins
+  `c2 00 c3 00 c4 00 …` — physical blocks **3920–3927 and 4056–4057** — each an
+  **8192-entry little-endian u16 table** (`482, 517, 519, 521, 523, 525, …`; the `+2`
+  step is the plane bit). This is the firmware's own block-translation table.
+
+Remaining for a **reference-free** rebuild (no known-good image): decode that table's
+exact value encoding — zone base + plane bit + bad-block indirection. Direct and `>>1`
+interpretations don't line up yet, so there's a header/zoning layer to pin. Once decoded,
+the emulator can serve the firmware its own logical view from the raw OOB dump = the true
+native FTL, no HLE.
