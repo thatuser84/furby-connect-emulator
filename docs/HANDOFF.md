@@ -745,3 +745,11 @@ boot). This is the emulated firmware genuinely driving the display, not replayed
 (`cpu_raise_irq`'s auto-dispatch still corrupts SP — `frame_tick` is the reliable path; fixing
 the C dispatch to match is a cleanup. Next: trigger the behavior engine to start a full eye
 animation so the pipeline composes a complete eye frame.)
+
+## §23 — FurbyROM (.fby) single-file container
+
+`tools/rom_pack.py` packs the firmware + NAND (+ optional raw dump / assets) into one
+zlib-compressed `.fby` file with a CRC'd table of contents; `run.py --rom furby.fby`
+loads and boots it in one shot. Verified: 115 MB of dumps → 60 MB ROM, GameCode
+round-trips byte-identical, firmware boots from the packed ROM. Format documented in the
+tool header (magic `FURBYROM`, versioned, kinds: firmware/nand/nand_raw/asset).

@@ -62,6 +62,7 @@ def write_png(path, width, height, pixels, scale=6):
 
 def main():
     ap = argparse.ArgumentParser(description="Boot the Furby Connect firmware in the emulator.")
+    ap.add_argument("--rom", help="a packed FurbyROM (.fby) containing GameCode + NAND")
     ap.add_argument("--gamecode", help="path to GameCode.bin")
     ap.add_argument("--nand", help="path to the logical NAND image")
     ap.add_argument("--nand-raw", help="raw physical NAND dump with OOB (528-byte pages); "
@@ -82,6 +83,18 @@ def main():
         import furby_display
         furby_display.dump_eyes(args.eyes, args.eyes_out)
         return
+
+    # --rom: a single packed .fby with GameCode + NAND
+    if args.rom:
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+        import rom_pack
+        gc_bytes, nand_bytes = rom_pack.load_for_emulator(args.rom)
+        args.gamecode = "/tmp/_furby_rom_gc.bin"
+        args.nand = "/tmp/_furby_rom_nand.bin"
+        open(args.gamecode, "wb").write(gc_bytes)
+        open(args.nand, "wb").write(nand_bytes)
+        print(f"[rom] loaded FurbyROM: firmware {len(gc_bytes):,} B, nand {len(nand_bytes):,} B")
 
     # --nand-raw: reconstruct the logical image from a raw physical dump (the FTL)
     if args.nand_raw:

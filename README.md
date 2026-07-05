@@ -31,6 +31,7 @@ MAME's `generalplus_gpl16250` reference. No prior emulator of this toy existed.
 | NAND FTL — boot from raw dump | ✅ working | `run.py --nand-raw` reconstructs the logical image from a raw physical dump (+OOB), byte-exact, and boots the firmware on it |
 | Audio megafile unpack | ✅ working | `.AMF` cracked → 1584 clips exported as `.a18` (`tools/amf_extract.py`) |
 | Audio SACM → PCM decode | 🔬 frontier | proprietary entropy-coded codec; container done, PCM decode open |
+| Single-file **FurbyROM (.fby)** | ✅ working | pack GameCode + NAND into one compressed file; `run.py --rom` boots it |
 
 ### The eyes 👁️
 
@@ -83,6 +84,7 @@ run.py               friendly runner (boot + drive display + report; or --eyes t
 furby_eye.html       standalone live viewer: the eye animating in true color
 tools/ftl_reconstruct.py  rebuild the logical NAND from a raw physical dump (+OOB), byte-exact
 tools/amf_extract.py      unpack a personality's .AMF audio megafile into .a18 clips
+tools/rom_pack.py         pack GameCode + NAND into one compressed FurbyROM (.fby)
 ```
 
 ### Tools
@@ -93,6 +95,10 @@ python3 tools/ftl_reconstruct.py --raw NANDmainFLASH.BIN --logical known-good.bi
 
 # unpack a personality's speech library (exports GeneralPlus .a18 clips)
 python3 tools/amf_extract.py /path/to/Personalities/Base/Base.AMF --out clips/
+
+# pack everything into one compressed .fby ROM, then boot from it
+python3 tools/rom_pack.py build --gamecode GameCode.bin --nand nand.bin --out furby.fby
+python3 run.py --rom furby.fby
 
 # boot straight from a raw physical NAND dump (FTL-reconstruct then boot)
 python3 run.py --gamecode GameCode.bin --nand-raw NANDmainFLASH.BIN --nand-ref known-good.bin
