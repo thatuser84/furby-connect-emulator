@@ -728,3 +728,20 @@ like the manual path; (2) trace the dispatch from the event-loop consumer into t
 derail and identify the missing runtime state; (3) once it survives dispatch, find the
 animation engine's live frame index and bridge it to `furby_display`. This is the deepest
 remaining subsystem — genuine multi-session firmware+peripheral RE, meaningfully advanced here.
+
+### §22.1 — Frame heartbeat working: firmware drives its live display pipeline
+
+Fixed the injection: SP is register **0** (`enum { SP, R1, R2, R3, R4, BP, SR, PC }`), so the
+earlier manual entry left a broken stack and the handler's RETI derailed. Pushing the return
+context properly (via `poke`) before entering the vector makes the frame handler run and
+return cleanly. Exposed as **`cpu.frame_tick()`** in `unsp_native.py`, wired into
+`run.py --monitor`.
+
+Result: with a frame heartbeat, the firmware leaves its idle loop and **runs its real display
+pipeline live** — PC moves through the display code (0x08fxxx / 0x067xxx), and it loads real
+palette entries (RGB565) + sprite-RAM/display-register state each frame (from all-zero at
+boot). This is the emulated firmware genuinely driving the display, not replayed frames.
+
+(`cpu_raise_irq`'s auto-dispatch still corrupts SP — `frame_tick` is the reliable path; fixing
+the C dispatch to match is a cleanup. Next: trigger the behavior engine to start a full eye
+animation so the pipeline composes a complete eye frame.)

@@ -71,8 +71,12 @@ def main():
     ticks = 0
     try:
         while True:
-            cpu.run(6_000_000)
-            total += 6_000_000
+            # drive a few display-frame interrupts, then let the firmware run
+            for _ in range(4):
+                if hasattr(cpu, "frame_tick"):
+                    cpu.frame_tick()
+                cpu.run(400_000)
+            total += 1_600_000
             lpc = cpu.lpc()
             cons, prod = read_ev()
             moving = (cons, prod) != prev_ev
@@ -100,10 +104,11 @@ def main():
                 f"   palette loaded   \x1b[97m{pal_live}\x1b[0m colors",
                 f"   sprite RAM       \x1b[97m{spr_live}\x1b[0m words set",
                 "",
-                "  \x1b[90mThe firmware is genuinely running. It boots, mounts its FAT",
-                "  filesystem, and services interrupts — then idles in its event loop,",
-                "  waiting for a behavior trigger (sensor/wake/BLE) to start an animation.",
-                "  Driving that engine to make the eyes animate is the next real step.\x1b[0m",
+                "  \x1b[90mThe firmware is genuinely running — booted, filesystem mounted,",
+                "  and now driven by a real display-frame heartbeat (IRQ line 5 -> 0x08f23f).",
+                "  It's executing its live display pipeline: the palette/sprite counts above",
+                "  are loaded by the running firmware each frame. Triggering a full eye",
+                "  animation (behavior engine) is the remaining step.\x1b[0m",
                 "",
                 "  \x1b[90mCtrl-C to quit\x1b[0m",
             ]
