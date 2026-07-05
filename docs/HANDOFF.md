@@ -681,3 +681,27 @@ firmware's own frame order (Base = 14 frames, verified flawless at palette bank 
 Remaining nicety: the eye palette handle in frames is a fixed value (0x10F2) resolved
 by firmware, so per-personality palette uses a preset (Base) / colorful-and-smooth
 auto-detect for the rest — shapes/animation are exact for all 7 personalities.
+
+## §20 — Live emulator frontend + the animation-engine frontier (honest status)
+
+Built a real CLI **monitor** (`emu/furby_monitor.py`, `run.py --monitor`): it runs the
+actual µ'nSP CPU on GameCode and shows the live machine — PC + disassembly, the event
+loop, instruction count, NAND reads, and the display/palette state the firmware sets up.
+Nothing is pre-rendered; every value is read from the running core.
+
+**What it reveals (and the honest limit):** the firmware boots, mounts its FS, services
+interrupts, then **idles in its event loop** (spins at 0x06cd8b; parks in the timer IRQ
+at 0x08f219). It never animates the eyes because a real Furby starts animations from its
+**behavior engine** reacting to sensors/wake/BLE — none of which exist in the emulator.
+The snapshot sprite RAM / palette / display regs read **all-zero**: the firmware composes
+no display while idle. So there is no live frame to show yet.
+
+Naive attempts to force it (raising IRQ line 5) get *taken* but jump to a stray loop
+(0x2205fb) with the event queue frozen — the vector isn't a clean frame handler in that
+state. Driving it for real means reversing the **interrupt → event-queue → behavior →
+SEQ/XLS → SPR-playlist** chain and injecting the trigger a sensor would, then reading the
+animation engine's live frame index and bridging it to `furby_display`. That's the real
+next mountain — not a GUI task.
+
+`furby_live.html` / `emu/furby_live.py` are honestly **decoder-output viewers** (they
+replay the decoded SPR playlist-8 frames), clearly labeled as such — not live emulation.

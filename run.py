@@ -70,6 +70,7 @@ def main():
     ap.add_argument("--eyes", metavar="PERSONALITY_DIR",
                     help="decode & dump a personality's eye animation (the display 'PPU') and exit")
     ap.add_argument("--eyes-out", default="eyes", help="output dir for --eyes frames")
+    ap.add_argument("--monitor", action="store_true", help="live terminal monitor of the running emulator")
     args = ap.parse_args()
 
     # --eyes: run the display PPU (no firmware boot needed)
@@ -80,6 +81,12 @@ def main():
         return
     if not args.gamecode or not args.nand:
         ap.error("--gamecode and --nand are required (unless using --eyes)")
+
+    if args.monitor:
+        import furby_monitor, sys
+        sys.argv = ["furby_monitor", "--gamecode", args.gamecode, "--nand", args.nand]
+        furby_monitor.main()
+        return
 
     ensure_built()
     import unsp_native as NAT
