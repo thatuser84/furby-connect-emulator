@@ -645,3 +645,20 @@ The resolution is what the emulator already does, made explicit: **`tools/ftl_re
 `raw NAND (+OOB) → ftl_reconstruct → logical image → emulator boots`. The only open
 purity item (reference-free reconstruction) is decoding the ROM's own system-block table
 format, which the ROM — not the firmware — consumes.
+
+## §18 — Audio: the .AMF megafile container cracked
+
+Each personality has a `<Name>.AMF` audio megafile (Base.AMF ≈ 7.4 MB) plus shared
+`AudioMegafiles/*.bin`. Container format (reverse-engineered, `tools/amf_extract.py`):
+
+- **top-level u32 offset table**, self-sizing (`table_bytes == offsets[0]`), → categories
+- each **category** is a second-level u32 offset table → **leaf clips**
+- each **leaf clip**: `[u32 length][u16 sample_rate=16000][SACM data]`
+
+Base.AMF category 0 alone yields **1584 clips** (~5.6 MB), all 16 kHz — the Furby's
+speech library. `amf_extract.py` rewraps each as a standard GeneralPlus **`.a18`**
+(`00 ff 00 ff` / `GENERALPLUS SP` header), so they're first-class files.
+
+**Frontier:** the payload is GeneralPlus **SACM** — a proprietary, *entropy-coded*
+codec (leaf entropy ≈ 7.9 bits/byte, so not plain ADPCM). PCM decode is a separate
+codec-RE task (like the FTL table, likely needs the ROM/codec ref). Container = done.
