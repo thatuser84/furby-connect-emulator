@@ -27,8 +27,10 @@ MAME's `generalplus_gpl16250` reference. No prior emulator of this toy existed.
 | Boot → wake → timekeeping → self-check | ✅ working | firmware runs its real startup all the way through |
 | Display pipeline (PPU enable, palette, sprites) | ✅ **driven with real data** | `0x707f` enabled; **107 live RGB565 palette colors + sprite RAM** loaded from zero |
 | Autonomous animation | ✅ working | driven by the real event interrupt (IRQ line 5) |
-| **The eyes — decoded & rendered** | ✅ **working** | the display "PPU" — see below |
-| Audio playback | 🔲 not started | |
+| **The eyes — decoded & rendered** | ✅ **working** | the display "PPU" + animated-GIF export — see below |
+| NAND FTL reconstruction | ✅ working | raw physical NAND → logical image, **byte-exact** (`tools/ftl_reconstruct.py`) |
+| Audio megafile unpack | ✅ working | `.AMF` cracked → 1584 clips exported as `.a18` (`tools/amf_extract.py`) |
+| Audio SACM → PCM decode | 🔬 frontier | proprietary entropy-coded codec; container done, PCM decode open |
 
 ### The eyes 👁️
 
@@ -77,6 +79,21 @@ emu/furby_display.py the eye "PPU" — decodes the CEL/PAL cell-graphics into ey
 run.py               friendly runner (boot + drive display + report; or --eyes to
                      dump a personality's eye animation)
 furby_eye.html       standalone live viewer: the eye animating in true color
+tools/ftl_reconstruct.py  rebuild the logical NAND from a raw physical dump (+OOB), byte-exact
+tools/amf_extract.py      unpack a personality's .AMF audio megafile into .a18 clips
+```
+
+### Tools
+
+```bash
+# rebuild the logical filesystem image from a raw physical NAND dump (with OOB)
+python3 tools/ftl_reconstruct.py --raw NANDmainFLASH.BIN --logical known-good.bin --rebuild out.bin
+
+# unpack a personality's speech library (exports GeneralPlus .a18 clips)
+python3 tools/amf_extract.py /path/to/Personalities/Base/Base.AMF --out clips/
+
+# dump / animate a personality's eyes
+python3 run.py --eyes /path/to/Personalities/Base --gif base_eye.gif
 ```
 
 ## Quick start
