@@ -746,10 +746,12 @@ boot). This is the emulated firmware genuinely driving the display, not replayed
 the C dispatch to match is a cleanup. Next: trigger the behavior engine to start a full eye
 animation so the pipeline composes a complete eye frame.)
 
-## §23 — FurbyROM (.fby) single-file container
+## §24 — Fixed cpu_raise_irq: interrupts dispatch correctly
 
-`tools/rom_pack.py` packs the firmware + NAND (+ optional raw dump / assets) into one
-zlib-compressed `.fby` file with a CRC'd table of contents; `run.py --rom furby.fby`
-loads and boots it in one shot. Verified: 115 MB of dumps → 60 MB ROM, GameCode
-round-trips byte-identical, firmware boots from the packed ROM. Format documented in the
-tool header (magic `FURBYROM`, versioned, kinds: firmware/nand/nand_raw/asset).
+Root cause of the IRQ-injection crashes: `irq_vecbase` (line n → vecbase + 2n) was only
+initialized inside `cpu_set_timer`, so `cpu_raise_irq` before a timer setup used vecbase=0
+→ `PC = 0 + 2·line` → derail into low memory. Fixed by initializing `irq_vecbase = 0x6ff0`
+in `cpu_reset` (it's a fixed SRAM trampoline table). Now `raise_irq(5)` vectors cleanly to
+the frame handler 0x08f23f, and `frame_tick()` uses the proper vectored path (no more
+manual stack-poke workaround). Verified: raise_irq(5) → 0x08f23f → 0x06d416 (event post),
+and the heartbeat drives the live display pipeline as before.

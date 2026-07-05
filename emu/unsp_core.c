@@ -118,6 +118,7 @@ void cpu_reset(Cpu *c, uint32_t entry, uint32_t cs) {
     c->sb = 0; c->irq_en = c->fiq_en = c->halted = 0; c->insns = 0;
     c->trapped = 0; c->trap_from = c->trap_to = 0;
     c->bnk = 0; c->divq_bit = 0xffffffffu;
+    c->irq_vecbase = 0x6ff0;    /* IRQ0-7 trampoline table in SRAM (line n -> +2n) */
     c->r[PC] = entry & 0xffff;
     c->r[SR] = (uint16_t)((c->r[SR] & 0xffc0) | (cs & 0x3f));
 }

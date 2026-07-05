@@ -198,23 +198,12 @@ class NativeCPU:
     # Registers: enum { SP, R1, R2, R3, R4, BP, SR, PC }
     _SP, _SR, _PC = 0, 6, 7
 
-    def frame_tick(self, vector_word=0x6ffa, budget=800):
-        """Deliver one display-frame interrupt to the running firmware by hand-
-        entering its frame vector (line-5 trampoline at 0x6ffa -> 0x08f23f) with a
-        proper stack frame, so the handler runs its real display code and RETIs back
-        cleanly. (cpu_raise_irq's auto-dispatch corrupts SP; this is the reliable path.)
-        Returns True if the handler returned cleanly to the caller."""
-        sPC = self.getreg(self._PC); sSR = self.getreg(self._SR); sSP = self.getreg(self._SP)
-        self.poke(sSP, sPC)
-        self.poke((sSP - 1) & 0xffff, sSR)
-        self.setreg(self._SP, (sSP - 2) & 0xffff)
-        self.setreg(self._PC, vector_word)
-        self.setreg(self._SR, sSR & 0xffc0)          # CS = 0 (trampoline in SRAM)
-        for _ in range(budget):
-            self.run(1)
-            if self.getreg(self._SP) == sSP and self.lpc() == sPC:
-                return True
-        return False
+    def frame_tick(self, line=5, budget=400_000):
+        """Deliver one display-frame interrupt (line 5 -> 0x08f23f) to the running
+        firmware and let it run the frame: the handler posts the frame event and the
+        firmware advances its display pipeline. Uses the proper vectored IRQ path."""
+        self.raise_irq(line)
+        self.run(budget)
     @property
     def irq_taken(self):    return _lib.cpu_irq_taken(self.c)
     @property
