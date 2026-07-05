@@ -28,7 +28,7 @@ MAME's `generalplus_gpl16250` reference. No prior emulator of this toy existed.
 | Display pipeline (PPU enable, palette, sprites) | ✅ **driven with real data** | `0x707f` enabled; **107 live RGB565 palette colors + sprite RAM** loaded from zero |
 | Autonomous animation | ✅ working | driven by the real event interrupt (IRQ line 5) |
 | **The eyes — decoded & rendered** | ✅ **working** | the display "PPU" + animated-GIF export — see below |
-| NAND FTL reconstruction | ✅ working | raw physical NAND → logical image, **byte-exact** (`tools/ftl_reconstruct.py`) |
+| NAND FTL — boot from raw dump | ✅ working | `run.py --nand-raw` reconstructs the logical image from a raw physical dump (+OOB), byte-exact, and boots the firmware on it |
 | Audio megafile unpack | ✅ working | `.AMF` cracked → 1584 clips exported as `.a18` (`tools/amf_extract.py`) |
 | Audio SACM → PCM decode | 🔬 frontier | proprietary entropy-coded codec; container done, PCM decode open |
 
@@ -93,6 +93,9 @@ python3 tools/ftl_reconstruct.py --raw NANDmainFLASH.BIN --logical known-good.bi
 
 # unpack a personality's speech library (exports GeneralPlus .a18 clips)
 python3 tools/amf_extract.py /path/to/Personalities/Base/Base.AMF --out clips/
+
+# boot straight from a raw physical NAND dump (FTL-reconstruct then boot)
+python3 run.py --gamecode GameCode.bin --nand-raw NANDmainFLASH.BIN --nand-ref known-good.bin
 
 # dump / animate a personality's eyes
 python3 run.py --eyes /path/to/Personalities/Base --gif base_eye.gif

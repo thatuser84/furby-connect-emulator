@@ -63,7 +63,11 @@ def write_png(path, width, height, pixels, scale=6):
 def main():
     ap = argparse.ArgumentParser(description="Boot the Furby Connect firmware in the emulator.")
     ap.add_argument("--gamecode", help="path to GameCode.bin")
-    ap.add_argument("--nand", help="path to the full NAND image")
+    ap.add_argument("--nand", help="path to the logical NAND image")
+    ap.add_argument("--nand-raw", help="raw physical NAND dump with OOB (528-byte pages); "
+                                       "reconstructed to a logical image via the FTL before boot")
+    ap.add_argument("--nand-ref", help="known-good logical image used to recover the FTL block map "
+                                       "for --nand-raw (until the ROM map-table format is decoded)")
     ap.add_argument("--boot-insns", type=int, default=600_000_000, help="instructions to run for boot")
     ap.add_argument("--frames", type=int, default=8, help="display frames to drive (IRQ line 5)")
     ap.add_argument("--palette-png", default=None, help="export the loaded eye palette to this PNG")
@@ -76,14 +80,30 @@ def main():
     # --eyes: run the display PPU (no firmware boot needed)
     if args.eyes:
         import furby_display
-        furby_display.dump_eyes(args.eyes, args.eyes_out, palette=None, auto=True,
-                                count=48, stride=furby_display.TILE_BYTES * furby_display.EYE_TILES)
+        furby_display.dump_eyes(args.eyes, args.eyes_out)
         return
+
+    # --nand-raw: reconstruct the logical image from a raw physical dump (the FTL)
+    if args.nand_raw:
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+        import ftl_reconstruct as FTL
+        if not args.nand_ref:
+            ap.error("--nand-raw needs --nand-ref (a known-good logical image to recover the map)")
+        raw = open(args.nand_raw, "rb").read()
+        nooob = FTL.strip_oob(raw) if len(raw) % FTL.PAGE_FULL == 0 else raw
+        logical = open(args.nand_ref, "rb").read()
+        p2l = FTL.recover_map(nooob, logical)
+        recon = FTL.rebuild(nooob, p2l, len(logical))
+        args.nand = "/tmp/_furby_ftl_recon.bin"
+        open(args.nand, "wb").write(recon)
+        print(f"[ftl] reconstructed logical image from raw dump: {len(p2l)} blocks mapped")
+
     if not args.gamecode or not args.nand:
-        ap.error("--gamecode and --nand are required (unless using --eyes)")
+        ap.error("--gamecode and --nand (or --nand-raw) are required (unless using --eyes)")
 
     if args.monitor:
-        import furby_monitor, sys
+        import furby_monitor
         sys.argv = ["furby_monitor", "--gamecode", args.gamecode, "--nand", args.nand]
         furby_monitor.main()
         return

@@ -705,3 +705,16 @@ next mountain — not a GUI task.
 
 `furby_live.html` / `emu/furby_live.py` are honestly **decoder-output viewers** (they
 replay the decoded SPR playlist-8 frames), clearly labeled as such — not live emulation.
+
+## §21 — FTL up and running (boot from a raw physical dump)
+
+`run.py --nand-raw NANDmainFLASH.BIN --nand-ref <logical>` now reconstructs the logical
+image from the raw physical NAND dump (with OOB) and boots the firmware on the result —
+verified: reconstruction is byte-exact and the firmware boots to its event loop with
+find-file resolving. End-to-end: **raw flash in → working Furby out.**
+
+The `--nand-ref` (a known-good logical image) is still needed to recover the block map,
+because the ROM's own map-table format resists decode (confirmed: no boot-ROM dump — the
+SPI flash is 99.7% zero settings data; the table values don't reconcile with physical or
+logical block numbering via any transform, direction, plane-bit, or FAT-validity anchor).
+Dropping `--nand-ref` is gated on that ROM format — a real, bounded, but ROM-dependent step.
