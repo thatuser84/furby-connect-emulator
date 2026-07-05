@@ -623,3 +623,25 @@ exact value encoding — zone base + plane bit + bad-block indirection. Direct a
 interpretations don't line up yet, so there's a header/zoning layer to pin. Once decoded,
 the emulator can serve the firmware its own logical view from the raw OOB dump = the true
 native FTL, no HLE.
+
+### §17.2 — Where the FTL lives: PROVEN (firmware trace)
+
+Traced every NAND page GameCode reads across a full boot on the raw OOB image
+(`nlog` records page + triggering PC). Result, definitive:
+
+- GameCode reads **only blocks 0–204**, and **never touches the system/map blocks
+  (3920–3927, 4056–4057)** — not once, anywhere in boot.
+- Just **7 NAND-reader PCs**, all in a tight low-level page driver (`0x76fea`–`0x7732c`).
+
+Conclusion: **the FTL is not in GameCode — it's in the GPL16258 internal boot ROM.**
+GameCode issues *logical* block reads and relies on the ROM having already built the
+physical→logical map (by reading those system blocks) and presenting a logical NAND.
+We HLE past the ROM, so on a raw physical dump those reads land on physical blocks and
+miss. This is an **undumped-ROM boundary**, not a decoding bug — a true native
+in-firmware FTL is impossible without a boot-ROM dump.
+
+The resolution is what the emulator already does, made explicit: **`tools/ftl_reconstruct.py`
+*is* the ROM's FTL, replicated** — raw physical dump → logical image, byte-exact. Pipeline:
+`raw NAND (+OOB) → ftl_reconstruct → logical image → emulator boots`. The only open
+purity item (reference-free reconstruction) is decoding the ROM's own system-block table
+format, which the ROM — not the firmware — consumes.
