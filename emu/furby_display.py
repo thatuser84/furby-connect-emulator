@@ -116,6 +116,70 @@ def render_eye(cel: bytes, off: int, bank: list[tuple[int, int, int]]):
     return [[bank[i] for i in row] for row in decode_eye_indices(cel, off)]
 
 
+# ---- animated GIF (indexed color -> a natural fit for the 64-color eyes) ---
+def _lzw_compress(indices: list[int], min_code_size: int) -> bytes:
+    """'Uncompressed' GIF LZW: emit literals with a periodic CLEAR so the code
+    width never has to grow — bulletproof and decodable by every GIF reader."""
+    clear = 1 << min_code_size
+    end = clear + 1
+    code_size = min_code_size + 1        # fixed for the whole stream
+    out_bits, nbits = 0, 0
+    buf = bytearray()
+
+    def emit(code):
+        nonlocal out_bits, nbits
+        out_bits |= code << nbits
+        nbits += code_size
+        while nbits >= 8:
+            buf.append(out_bits & 0xFF)
+            out_bits >>= 8
+            nbits -= 8
+
+    emit(clear)
+    since_clear = 0
+    for idx in indices:
+        emit(idx)
+        since_clear += 1
+        if since_clear == clear - 2:     # reset before the dict would force a wider code
+            emit(clear)
+            since_clear = 0
+    emit(end)
+    if nbits:
+        buf.append(out_bits & 0xFF)
+    return bytes(buf)
+
+
+def write_gif(path: str, frames_idx: list[list[list[int]]], palette: list[tuple[int, int, int]],
+              scale: int = 3, delay_cs: int = 12) -> None:
+    """Animated GIF from indexed frames (each a HxW grid of palette indices)."""
+    h = len(frames_idx[0]) * scale
+    w = len(frames_idx[0][0]) * scale
+    pal = (palette + [(0, 0, 0)] * 256)[:256]
+    gct = b"".join(bytes(c) for c in pal)
+    out = bytearray(b"GIF89a")
+    out += struct.pack("<HH", w, h) + bytes((0xF7, 0, 0)) + gct     # 256-color global table
+    out += b"\x21\xff\x0bNETSCAPE2.0\x03\x01\x00\x00\x00"           # loop forever
+    for fr in frames_idx:
+        px = []
+        for row in fr:
+            up = []
+            for i in row:
+                up += [i] * scale
+            for _ in range(scale):
+                px.extend(up)
+        out += b"\x21\xf9\x04\x04" + struct.pack("<H", delay_cs) + b"\x00\x00"
+        out += b"\x2c" + struct.pack("<HHHH", 0, 0, w, h) + b"\x00"
+        mcs = 8
+        out += bytes((mcs,))
+        comp = _lzw_compress(px, mcs)
+        for i in range(0, len(comp), 255):
+            chunk = comp[i:i + 255]
+            out += bytes((len(chunk),)) + chunk
+        out += b"\x00"
+    out += b"\x3b"
+    open(path, "wb").write(bytes(out))
+
+
 def frame_variety(cel: bytes, off: int) -> int:
     return len({i for row in decode_eye_indices(cel, off) for i in row})
 
@@ -174,7 +238,8 @@ def detect_eye_palette(cel: bytes, colors: list[int], samples: int = 12) -> int:
     return best_bank
 
 
-def dump_eyes(pdir: str, out: str, palette: int | None, auto: bool, count: int, stride: int):
+def dump_eyes(pdir: str, out: str, palette: int | None, auto: bool, count: int, stride: int,
+              gif: str | None = None):
     cel_path, pal_path = find_personality_files(pdir)
     if not cel_path or not pal_path:
         raise SystemExit(f"no .CEL/.PAL in {pdir} (Generic uses shared graphics)")
@@ -192,11 +257,17 @@ def dump_eyes(pdir: str, out: str, palette: int | None, auto: bool, count: int, 
     os.makedirs(out, exist_ok=True)
     saved = 0
     off = 0
+    idx_frames = []
     while off + EYE_TILES * TILE_BYTES <= len(cel) and saved < count:
         if is_complete_eye(cel, off, bank):                 # framed, centered eyes only
             write_png(os.path.join(out, f"eye_{saved:03d}.png"), render_eye(cel, off, bank))
+            if gif:
+                idx_frames.append(decode_eye_indices(cel, off))
             saved += 1
         off += stride
+    if gif and idx_frames:
+        write_gif(gif, idx_frames, bank)
+        print(f"  animated eye -> {gif}")
     print(f"[{os.path.basename(pdir)}] palette bank {palette} -> {saved} eye frames in {out}/")
     return saved
 
@@ -209,8 +280,9 @@ def main():
     ap.add_argument("--auto", action="store_true", help="auto-pick a lively palette bank")
     ap.add_argument("--count", type=int, default=48, help="max frames to render")
     ap.add_argument("--stride", type=int, default=TILE_BYTES * EYE_TILES, help="byte stride between frames")
+    ap.add_argument("--gif", default=None, help="also write an animated GIF of the eye to this path")
     a = ap.parse_args()
-    dump_eyes(a.personality, a.out, a.palette, a.auto, a.count, a.stride)
+    dump_eyes(a.personality, a.out, a.palette, a.auto, a.count, a.stride, gif=a.gif)
 
 
 if __name__ == "__main__":
