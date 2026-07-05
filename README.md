@@ -32,6 +32,7 @@ MAME's `generalplus_gpl16250` reference. No prior emulator of this toy existed.
 | Audio megafile unpack | ✅ working | `.AMF` cracked → 1584 clips exported as `.a18` (`tools/amf_extract.py`) |
 | Audio SACM → PCM decode | 🔬 frontier | proprietary entropy-coded codec; container done, PCM decode open |
 | Single-file **FurbyROM (.fby)** | ✅ working | pack GameCode + NAND into one compressed file; `run.py --rom` boots it |
+| Self-test / **diagnostic** | ✅ working | `run.py --diag` runs every subsystem and reports plain-English PASS/FAIL |
 
 ### The eyes 👁️
 
@@ -85,6 +86,7 @@ furby_eye.html       standalone live viewer: the eye animating in true color
 tools/ftl_reconstruct.py  rebuild the logical NAND from a raw physical dump (+OOB), byte-exact
 tools/amf_extract.py      unpack a personality's .AMF audio megafile into .a18 clips
 tools/rom_pack.py         pack GameCode + NAND into one compressed FurbyROM (.fby)
+tools/furby_diag.py       self-test: boots + checks every subsystem, readable PASS/FAIL
 ```
 
 ### Tools

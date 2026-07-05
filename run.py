@@ -76,6 +76,7 @@ def main():
                     help="decode & dump a personality's eye animation (the display 'PPU') and exit")
     ap.add_argument("--eyes-out", default="eyes", help="output dir for --eyes frames")
     ap.add_argument("--monitor", action="store_true", help="live terminal monitor of the running emulator")
+    ap.add_argument("--diag", action="store_true", help="run the self-test / diagnostic and exit")
     args = ap.parse_args()
 
     # --eyes: run the display PPU (no firmware boot needed)
@@ -114,6 +115,15 @@ def main():
 
     if not args.gamecode or not args.nand:
         ap.error("--gamecode and --nand (or --nand-raw) are required (unless using --eyes)")
+
+    if args.diag:
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "tools"))
+        import furby_diag
+        sys.argv = ["furby_diag"] + (["--rom", args.rom] if args.rom else
+                                     ["--gamecode", args.gamecode, "--nand", args.nand])
+        furby_diag.main()
+        return
 
     if args.monitor:
         import furby_monitor
