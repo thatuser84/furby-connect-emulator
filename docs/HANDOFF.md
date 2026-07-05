@@ -567,3 +567,37 @@ read the exact offset/width — then reconstruct the image with identity ids the
   as the logical id and how it compares them → that gives the true layout. Then encode
   identity there. This is the precise remaining task; everything else (528 geometry,
   reconstruction, alignment, ECC-clean) is done and verified.
+
+## §17 — True native FTL: findings (the raw-OOB dump)
+
+`furbhax/firmware/NANDmainFLASH.BIN` is the **raw physical NAND with OOB**
+(262144 × 528-byte pages = 512 data + 16 spare). The core supports this geometry
+(`set_nand_page_size(528)`). Goal: let the firmware's own flash-translation-layer
+mount it (no HLE). Status: **runs the mount path, native find-file still misses.**
+Characterized why:
+
+- **Not a GameCode mismatch.** Our `GameCode.bin[:512]` is byte-identical inside the
+  furbhax `no-dividers.bin` (at physical 0x3945200). Same firmware version.
+- **The dump is in physical order; the FTL remaps blocks.** Measured physical→logical
+  block (32 pages/block) for known files against our working *logical* image
+  (`furby-nand (Fixed OOB Data).bin`, 223232 pages):
+  | file | phys block | logical block |
+  |---|---|---|
+  | GameCode | 3665 | 121 |
+  | Base.CEL | 385 | 0 |
+  | Base.PAL | 1813 | 2309 |
+- **The OOB is not a plaintext logical-block number.** First-page spare of GameCode's
+  physical block reads `4d e5 43 7e 0a 13 a6 70 …` — gpac800 FTL metadata / ECC, not
+  `121`. So the logical image can't be rebuilt by a simple "read LBN, sort blocks."
+
+**Scoped next step (either path):**
+1. *Reverse the gpac800 FTL spare format* — decode how the 16-byte OOB encodes the
+   logical block number (+ ECC), then rebuild the logical image from the raw dump and
+   confirm it matches the known-good `Fixed OOB Data` image byte-for-byte.
+2. *Trace the firmware's mount* — instrument NAND spare-area reads (col 512–527) during
+   boot with the 528 image; verify the FTL is being served OOB and where its map-build
+   diverges. (MAME `generalplus_gpl16250`'s gpac800 bootstrap is the reference.)
+
+The emulator already mounts + reads the real filesystem via the parsed FAT on the
+logical image, so this is a fidelity upgrade (firmware-driven vs pre-fixed image),
+not a functional blocker.
