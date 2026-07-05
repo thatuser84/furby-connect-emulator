@@ -706,15 +706,25 @@ next mountain — not a GUI task.
 `furby_live.html` / `emu/furby_live.py` are honestly **decoder-output viewers** (they
 replay the decoded SPR playlist-8 frames), clearly labeled as such — not live emulation.
 
-## §21 — FTL up and running (boot from a raw physical dump)
+## §22 — Toward live animation: frame IRQ cracked, dispatch is the wall
 
-`run.py --nand-raw NANDmainFLASH.BIN --nand-ref <logical>` now reconstructs the logical
-image from the raw physical NAND dump (with OOB) and boots the firmware on the result —
-verified: reconstruction is byte-exact and the firmware boots to its event loop with
-find-file resolving. End-to-end: **raw flash in → working Furby out.**
+Real progress on driving the firmware to animate:
 
-The `--nand-ref` (a known-good logical image) is still needed to recover the block map,
-because the ROM's own map-table format resists decode (confirmed: no boot-ROM dump — the
-SPI flash is 99.7% zero settings data; the table values don't reconcile with physical or
-logical block numbering via any transform, direction, plane-bit, or FAT-validity anchor).
-Dropping `--nand-ref` is gated on that ROM format — a real, bounded, but ROM-dependent step.
+- **Frame interrupt identified & verified.** The eye/display frame handler is **0x08f23f**,
+  reached via **IRQ line 5** (vector trampoline at word 0x6ffa: `fe88 f23f` → `goto 0x08f23f`).
+  Driving PC=0x6ffa manually executes it cleanly: it runs `call 0x06d412`, which **posts a
+  frame event** (increments producer index 0x5a46). Verified.
+- **`cpu_raise_irq` is buggy.** Firing it does not push/dispatch cleanly (SP unchanged, state
+  corrupts, PC derails to low memory). Manual trampoline entry is the working workaround.
+- **Frame events now flow.** Manually injecting the frame handler each "frame" climbs the
+  producer 0x5a46 (1→60) and the firmware consumes one (consumer 0x5a45 0→1).
+- **The wall: event/behavior dispatch derails.** On consuming an event the firmware runs
+  RAM-resident routines (coherent code at 0x0000xx, bp-relative), then jumps to unmapped
+  0x2xxxxx — it hits a runtime dependency the emulator doesn't satisfy (likely a peripheral/
+  DSP/timer state or a data structure the behavior engine expects).
+
+**Next real steps:** (1) fix `cpu_raise_irq` so interrupts dispatch through the vector table
+like the manual path; (2) trace the dispatch from the event-loop consumer into the 0x2xxxxx
+derail and identify the missing runtime state; (3) once it survives dispatch, find the
+animation engine's live frame index and bridge it to `furby_display`. This is the deepest
+remaining subsystem — genuine multi-session firmware+peripheral RE, meaningfully advanced here.
