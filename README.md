@@ -42,23 +42,25 @@ frame-diffs, write-histograms and PPU snapshots: no framebuffer, no display DMA)
 plays **pre-rendered eye animations from flash** — a custom cell-graphics format we
 reverse-engineered here (cross-checked against the WAHCKon *furbhax* teardown):
 
-- **`.CEL`** — the pixels, as 6-bit palette indices, in 48×16-byte tiles (64×16 px);
-  four stacked tiles make a 64×64 eye
-- **`.PAL`** — the color tables, 64-color RGB555 banks (each personality/animation
-  uses its own bank — Base's violet eye at bank 64, the default blue eye at 580)
-- **`.SPR` / `.SEQ`** — cell placement + animation sequencing (partially decoded)
+- **`.CEL`** — the pixels: 64×64 cels (0xC00 bytes each), 3 bytes → 4 six-bit palette
+  indices, MSB-first
+- **`.PAL`** — the color tables: 64-color RGB555 banks (0x80 bytes each)
+- **`.SPR`** — **16 animation playlists → frames**; each frame is `[cel0,pal0, cel1,pal1,
+  cel2,pal2, cel3,pal3, 0xFFFF]` — four 64×64 quarter-cels laid TL/TR/BL/BR into one
+  **128×128** eye. **Playlist 8 is the eye animation.**
 
-`emu/furby_display.py` decodes this and renders the eyes. Sample frames are in
-[`eyes_sample/`](eyes_sample/); the live animated viewer is
-[`furby_eye.html`](furby_eye.html).
+`emu/furby_display.py` decodes this and renders each personality's real eye animation,
+in the firmware's own frame order, to PNG frames + an animated GIF. Sample animation is
+in [`eyes_sample/`](eyes_sample/); the live viewer is [`furby_eye.html`](furby_eye.html).
 
 ```bash
-python3 run.py --eyes /path/to/Personalities/Base --eyes-out eyes/
+python3 run.py --eyes /path/to/Personalities/Base --gif base_eye.gif
 ```
 
-*Remaining:* the `.SEQ`/`.SPR` chain that maps each animation frame to its exact
-palette isn't fully decoded, so per-personality palettes currently use verified
-presets / a best-effort auto-detect rather than the firmware's own mapping.
+*Nicety left:* the palette handle inside each frame is a fixed value (`0x10F2`) resolved
+by the firmware, so per-personality color uses a verified preset (Base) or a
+colorful-and-smooth auto-detect for the rest — the **shapes and animation are exact for
+all 7 personalities**. Formats cross-checked against Furby-ReConnect's `furby.py`.
 
 ---
 
