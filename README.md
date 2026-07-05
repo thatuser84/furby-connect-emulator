@@ -131,7 +131,7 @@ exact next steps for the compositor).
 
 ## Credits & references
 
-- **[Furby-ReConnect](https://github.com/Furby-ReConnect/Furby)** — extracted firmware/NAND files and prior RE
+- **[Furby-ReConnect](https://github.com/Furby-ReConnect/Furby)** — extracted firmware/NAND files, and `furby.py` (l0ss/swarley) which documents the DLC/CEL/SPR/PAL graphics format used by the eye PPU
 - **[MAME](https://www.mamedev.org/)** `generalplus_gpl16250` — authoritative gpac800 NAND/SoC reference (GPL-2.0)
 - **[bluefluff](https://github.com/Jeija/bluefluff)** — Furby Connect BLE/update-format RE
 

@@ -662,3 +662,22 @@ speech library. `amf_extract.py` rewraps each as a standard GeneralPlus **`.a18`
 **Frontier:** the payload is GeneralPlus **SACM** — a proprietary, *entropy-coded*
 codec (leaf entropy ≈ 7.9 bits/byte, so not plain ADPCM). PCM decode is a separate
 codec-RE task (like the FTL table, likely needs the ROM/codec ref). Container = done.
+
+## §19 — Eye animation format fully cracked (SPR/CEL/PAL)
+
+Cross-referenced Furby-ReConnect's `furby.py` (l0ss/swarley) and reimplemented
+dependency-free in `emu/furby_display.py`. The complete pipeline:
+
+- **CEL**: one 64×64 cel = 0xC00 bytes, 64 rows × 48 bytes, 3 bytes → 4 six-bit
+  pixels (MSB-first), each a palette index 0..63.
+- **PAL**: 64-color RGB555 banks, 0x80 bytes each.
+- **SPR**: 0xE0 header of **16 playlists** (framecount:u16, t2_off:u32, layer:u32,
+  0x40), → per-playlist frame-pointer tables → **frames**. Each frame = **9 u16:
+  `[cel0,pal0, cel1,pal1, cel2,pal2, cel3,pal3, 0xFFFF]`** — four 64×64 quarter-cels
+  laid TL/TR/BL/BR into a **128×128** eye. **Playlist 8 is the eye animation.**
+
+`run.py --eyes <Personality> --gif out.gif` now renders the *real* animation in the
+firmware's own frame order (Base = 14 frames, verified flawless at palette bank 64).
+Remaining nicety: the eye palette handle in frames is a fixed value (0x10F2) resolved
+by firmware, so per-personality palette uses a preset (Base) / colorful-and-smooth
+auto-detect for the rest — shapes/animation are exact for all 7 personalities.
