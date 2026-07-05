@@ -27,23 +27,36 @@ MAME's `generalplus_gpl16250` reference. No prior emulator of this toy existed.
 | Boot → wake → timekeeping → self-check | ✅ working | firmware runs its real startup all the way through |
 | Display pipeline (PPU enable, palette, sprites) | ✅ **driven with real data** | `0x707f` enabled; **107 live RGB565 palette colors + sprite RAM** loaded from zero |
 | Autonomous animation | ✅ working | driven by the real event interrupt (IRQ line 5) |
-| **Visible eye *image*** | ⏳ next milestone | see below — needs the PPU compositor |
+| **The eyes — decoded & rendered** | ✅ **working** | the display "PPU" — see below |
 | Audio playback | 🔲 not started | |
 
-### The eyes
+### The eyes 👁️
 
-The firmware **renders its eyes** — it boots, mounts its filesystem, reaches its main
-event loop, and drives the PPU with real palette + sprite data on every frame
-interrupt. You can export the **live loaded palette** as a PNG (`run.py --palette-png`);
-those are the actual eye colors the firmware loads.
+**The Furby's eyes render, in true color.** ([Watch the live animated eye.](https://claude.ai/code/artifact/0ccd9cea-9bec-4858-8ee6-a1f7fb1f3643))
 
-What's *not* done yet is turning that into a **viewable picture**. The Furby has **no
-RAM framebuffer** — its PPU composites sprites + tiles + palette straight to the eye
-LCD in hardware, live, like a game console (confirmed: full-address-space frame diffs
-and write-histograms find only display *lists*, never a pixel buffer; no display DMA).
-Producing an image therefore requires emulating that **PPU compositor** (decode the
-display list → fetch each sprite's tile graphics → draw through the palette). That's a
-well-scoped next project, documented in [`docs/HANDOFF.md`](docs/HANDOFF.md).
+It turned out the Furby does **not** drive its two round eye-LCDs through the
+GPL16258's standard sprite/tilemap PPU (those registers stay empty — confirmed by
+frame-diffs, write-histograms and PPU snapshots: no framebuffer, no display DMA). It
+plays **pre-rendered eye animations from flash** — a custom cell-graphics format we
+reverse-engineered here (cross-checked against the WAHCKon *furbhax* teardown):
+
+- **`.CEL`** — the pixels, as 6-bit palette indices, in 48×16-byte tiles (64×16 px);
+  four stacked tiles make a 64×64 eye
+- **`.PAL`** — the color tables, 64-color RGB555 banks (each personality/animation
+  uses its own bank — Base's violet eye at bank 64, the default blue eye at 580)
+- **`.SPR` / `.SEQ`** — cell placement + animation sequencing (partially decoded)
+
+`emu/furby_display.py` decodes this and renders the eyes. Sample frames are in
+[`eyes_sample/`](eyes_sample/); the live animated viewer is
+[`furby_eye.html`](furby_eye.html).
+
+```bash
+python3 run.py --eyes /path/to/Personalities/Base --eyes-out eyes/
+```
+
+*Remaining:* the `.SEQ`/`.SPR` chain that maps each animation frame to its exact
+palette isn't fully decoded, so per-personality palettes currently use verified
+presets / a best-effort auto-detect rather than the firmware's own mapping.
 
 ---
 
@@ -60,7 +73,10 @@ emu/unsp_cpu.py      pure-Python reference core (used to validate the C core)
 emu/unsp_disasm.py   µ'nSP ISA 1.3 disassembler
 emu/unsp_trace.py    recursive-descent tracer
 emu/gpl16250_regs.py peripheral register names
-run.py               friendly runner (boot + drive display + report + palette PNG)
+emu/furby_display.py the eye "PPU" — decodes the CEL/PAL cell-graphics into eye frames
+run.py               friendly runner (boot + drive display + report; or --eyes to
+                     dump a personality's eye animation)
+furby_eye.html       standalone live viewer: the eye animating in true color
 ```
 
 ## Quick start

@@ -39,6 +39,17 @@ _sigs = {
     "cpu_wrhist_enable": (None, [_p]),
     "cpu_wrhist_reset": (None, [_p]),
     "cpu_wrhist_get": (_u32, [_p, _u32]),
+    "cpu_wlog_set": (None, [_p, _u32]),
+    "cpu_wlog_n": (_u32, [_p]),
+    "cpu_wlog_get": (_u16, [_p, _u32]),
+    "cpu_wlog_reset": (None, [_p]),
+    "cpu_spriteram_get": (_u16, [_p, _u32]),
+    "cpu_snap_valid": (ctypes.c_int, [_p]),
+    "cpu_snap_spr": (_u16, [_p, _u32]),
+    "cpu_snap_pal": (_u16, [_p, _u32]),
+    "cpu_snap_reg": (_u16, [_p, _u32]),
+    "cpu_palwpc_n": (_u32, [_p]),
+    "cpu_palwpc_get": (_u32, [_p, _u32]),
     "cpu_nand_reads": (_u64, [_p]),
     "cpu_bootcopy": (None, [_p, _u32, _u32, _u32]),
     "cpu_set_ready": (None, [_p, _u32, _u16]),
@@ -113,6 +124,17 @@ class NativeCPU:
     def wrhist_enable(self): _lib.cpu_wrhist_enable(self.c)
     def wrhist_reset(self): _lib.cpu_wrhist_reset(self.c)
     def wrhist_get(self, blk): return _lib.cpu_wrhist_get(self.c, blk)
+    def wlog_set(self, addr): _lib.cpu_wlog_set(self.c, addr)
+    def wlog_n(self): return _lib.cpu_wlog_n(self.c)
+    def wlog_get(self, i): return _lib.cpu_wlog_get(self.c, i)
+    def wlog_reset(self): _lib.cpu_wlog_reset(self.c)
+    def spriteram_get(self, i): return _lib.cpu_spriteram_get(self.c, i)
+    def snap_valid(self): return bool(_lib.cpu_snap_valid(self.c))
+    def snap_spr(self, i): return _lib.cpu_snap_spr(self.c, i)
+    def snap_pal(self, i): return _lib.cpu_snap_pal(self.c, i)
+    def snap_reg(self, i): return _lib.cpu_snap_reg(self.c, i)
+    def palwpc_n(self): return _lib.cpu_palwpc_n(self.c)
+    def palwpc_get(self, i): return _lib.cpu_palwpc_get(self.c, i)
     @property
     def nand_reads(self): return _lib.cpu_nand_reads(self.c)
     def bootcopy(self, dest, src, nwords):

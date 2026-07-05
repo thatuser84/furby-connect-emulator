@@ -17,3 +17,8 @@ __pycache__/
 # scratch
 *.png
 .DS_Store
+
+# keep the showcase eye frames + viewer
+!furby_eye.html
+!eyes_sample/
+!eyes_sample/*.png

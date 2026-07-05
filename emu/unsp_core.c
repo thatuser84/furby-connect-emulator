@@ -93,6 +93,16 @@ typedef struct {
     uint32_t vfh_cluster[16], vfh_size[16], vfh_pos[16];
     int      vfh_used[16];
     uint32_t *wr_hist;          /* optional RAM-write histogram [0x4000], per 1K-word block */
+    uint32_t wlog_addr;         /* capture values written to this MMIO addr (0 = off) */
+    uint16_t *wlog;             /* captured value stream */
+    uint32_t wlog_n, wlog_cap;
+    uint16_t spriteram[0x800];  /* PPU sprite table, banked by 0x707e (bank0=[0..3ff] bank1=[400..7ff]) */
+    uint16_t snap_spriteram[0x800]; /* snapshot of spriteram + palette + video regs at PPU-enable */
+    uint16_t snap_pal[0x100];
+    uint16_t snap_regs[0x80];
+    int snap_valid;
+    uint32_t palwpc[32];        /* distinct LPCs that write the palette 0x7300-0x73ff */
+    int palwpc_n;
 } Cpu;
 
 /* ---- lifecycle ---- */
@@ -138,6 +148,20 @@ void cpu_set_nand_oob_emul(Cpu *c, int on) { c->nand_oob_emul = on ? 1 : 0; }
 void cpu_wrhist_enable(Cpu *c) { if (!c->wr_hist) c->wr_hist = (uint32_t*)calloc(0x4000, sizeof(uint32_t)); }
 void cpu_wrhist_reset(Cpu *c) { if (c->wr_hist) memset(c->wr_hist, 0, 0x4000*sizeof(uint32_t)); }
 uint32_t cpu_wrhist_get(Cpu *c, uint32_t blk) { return (c->wr_hist && blk < 0x4000) ? c->wr_hist[blk] : 0; }
+void cpu_wlog_set(Cpu *c, uint32_t addr) {
+    if (!c->wlog) { c->wlog_cap = 1u << 20; c->wlog = (uint16_t*)malloc(c->wlog_cap * 2); }
+    c->wlog_addr = addr; c->wlog_n = 0;
+}
+uint32_t cpu_wlog_n(Cpu *c) { return c->wlog_n; }
+uint16_t cpu_wlog_get(Cpu *c, uint32_t i) { return (c->wlog && i < c->wlog_n) ? c->wlog[i] : 0; }
+void cpu_wlog_reset(Cpu *c) { c->wlog_n = 0; }
+uint16_t cpu_spriteram_get(Cpu *c, uint32_t i) { return (i < 0x800) ? c->spriteram[i] : 0; }
+int      cpu_snap_valid(Cpu *c) { return c->snap_valid; }
+uint16_t cpu_snap_spr(Cpu *c, uint32_t i) { return (i < 0x800) ? c->snap_spriteram[i] : 0; }
+uint16_t cpu_snap_pal(Cpu *c, uint32_t i) { return (i < 0x100) ? c->snap_pal[i] : 0; }
+uint16_t cpu_snap_reg(Cpu *c, uint32_t i) { return (i < 0x80) ? c->snap_regs[i] : 0; }
+uint32_t cpu_palwpc_n(Cpu *c) { return c->palwpc_n; }
+uint32_t cpu_palwpc_get(Cpu *c, uint32_t i) { return (i < (uint32_t)c->palwpc_n) ? c->palwpc[i] : 0; }
 
 /* recompute the effective NAND byte address from the latched regs (MAME formula,
  * page size 512 because our image has the OOB stripped). */
@@ -319,6 +343,28 @@ static inline void write16(Cpu *c, uint32_t a, uint16_t v) {
     if (a >= MMIO_LO && a <= MMIO_HI) {
         uint32_t o = a - MMIO_LO;
         c->mmio_writes[o]++; c->mmio_last[o] = v; c->mmio_has[o] = 1;
+        if (a == c->wlog_addr && c->wlog && c->wlog_n < c->wlog_cap) c->wlog[c->wlog_n++] = v;
+        /* record distinct PCs that write the palette (the eye color loader) */
+        if (a >= 0x7300 && a <= 0x73ff) {
+            uint32_t lpc = (((uint32_t)(c->r[SR] & 0x3f)) << 16) | c->r[PC];
+            int seen = 0;
+            for (int i = 0; i < c->palwpc_n; i++) if (c->palwpc[i] == lpc) { seen = 1; break; }
+            if (!seen && c->palwpc_n < 32) c->palwpc[c->palwpc_n++] = lpc;
+        }
+        /* PPU sprite table 0x7400-0x77ff, banked by 0x707e (MAME spriteram_w) */
+        if (a >= 0x7400 && a <= 0x77ff) {
+            uint32_t off = a - 0x7400;
+            if (c->mmio_last[0x707e - MMIO_LO] & 1) off += 0x400;
+            c->spriteram[off] = v;
+        }
+        /* snapshot the whole PPU state at each PPU-enable write (0x707f) — captures
+         * the render moment before the firmware clears the table for the next frame */
+        if (a == 0x707f && v) {
+            memcpy(c->snap_spriteram, c->spriteram, sizeof(c->spriteram));
+            for (int i = 0; i < 0x100; i++) c->snap_pal[i]  = c->mmio_last[(0x7300 - MMIO_LO) + i];
+            for (int i = 0; i < 0x80;  i++) c->snap_regs[i] = c->mmio_last[(0x7000 - MMIO_LO) + i];
+            c->snap_valid = 1;
+        }
         /* NAND controller */
         switch (a) {
         case 0x7850: c->nand_7850 = v; break;

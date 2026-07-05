@@ -62,12 +62,24 @@ def write_png(path, width, height, pixels, scale=6):
 
 def main():
     ap = argparse.ArgumentParser(description="Boot the Furby Connect firmware in the emulator.")
-    ap.add_argument("--gamecode", required=True, help="path to GameCode.bin")
-    ap.add_argument("--nand", required=True, help="path to the full NAND image")
+    ap.add_argument("--gamecode", help="path to GameCode.bin")
+    ap.add_argument("--nand", help="path to the full NAND image")
     ap.add_argument("--boot-insns", type=int, default=600_000_000, help="instructions to run for boot")
     ap.add_argument("--frames", type=int, default=8, help="display frames to drive (IRQ line 5)")
     ap.add_argument("--palette-png", default=None, help="export the loaded eye palette to this PNG")
+    ap.add_argument("--eyes", metavar="PERSONALITY_DIR",
+                    help="decode & dump a personality's eye animation (the display 'PPU') and exit")
+    ap.add_argument("--eyes-out", default="eyes", help="output dir for --eyes frames")
     args = ap.parse_args()
+
+    # --eyes: run the display PPU (no firmware boot needed)
+    if args.eyes:
+        import furby_display
+        furby_display.dump_eyes(args.eyes, args.eyes_out, palette=None, auto=True,
+                                count=48, stride=furby_display.TILE_BYTES * furby_display.EYE_TILES)
+        return
+    if not args.gamecode or not args.nand:
+        ap.error("--gamecode and --nand are required (unless using --eyes)")
 
     ensure_built()
     import unsp_native as NAT
