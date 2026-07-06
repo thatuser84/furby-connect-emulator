@@ -80,6 +80,8 @@ typedef struct {
     uint64_t dma_runs;          /* telemetry */
     /* banked external (CS) window: 0x200000-0x3fffff -> NAND via 0x7810 */
     uint32_t cs_base;           /* word offset into NAND where cs-space starts */
+    uint16_t *csram;            /* CS/SDRAM backing (writable), MAME csbase=0x20000 */
+    uint32_t csram_words;
     uint64_t cs_reads;
     /* debug PC watchpoints: count executions of up to 32 machine addresses */
     uint32_t watch[32];
@@ -334,12 +336,14 @@ static inline uint16_t read16(Cpu *c, uint32_t a) {
     /* NOTE: 0x020000-0x1fffff is SDRAM the firmware writes to (not cs-space) —
      * mapping it to NAND breaks boot. Left as c->mem. */
     /* banked external window -> NAND (MAME cs_bank_space_r: bank = 0x7810 & 0x3f) */
-    if (a >= 0x200000 && a <= 0x3fffff && c->nand) {
+    if (a >= 0x200000 && a <= 0x3fffff) {
         uint32_t bank = c->mmio_last[0x7810 - MMIO_LO] & 0x3f;
-        uint32_t realoffset = (a - 0x200000) + bank * 0x200000u - 0x20000u + c->cs_base;
+        int32_t realoffset = (int32_t)((a - 0x200000) + bank * 0x200000u) - (int32_t)c->cs_base;
         c->cs_reads++;
-        uint32_t b = realoffset * 2;
-        if (b + 1 < c->nand_size) return (uint16_t)(c->nand[b] | (c->nand[b + 1] << 8));
+        if (realoffset < 0) return 0;
+        if ((uint32_t)realoffset < c->csram_words) return c->csram[realoffset];   /* SDRAM (cs0/cs1) */
+        uint32_t b = ((uint32_t)realoffset - c->csram_words) * 2;                  /* NAND (cs2) */
+        if (c->nand && b + 1 < c->nand_size) return (uint16_t)(c->nand[b] | (c->nand[b + 1] << 8));
         return 0;
     }
     return c->mem[a];
@@ -387,6 +391,12 @@ static inline void write16(Cpu *c, uint32_t a, uint16_t v) {
             if (off == 0 && (v & 1)) dma_trigger(c, ch);
         }
         return;
+    }
+    if (a >= 0x200000 && a <= 0x3fffff) {
+        uint32_t bank = c->mmio_last[0x7810 - MMIO_LO] & 0x3f;
+        int32_t realoffset = (int32_t)((a - 0x200000) + bank * 0x200000u) - (int32_t)c->cs_base;
+        if (realoffset >= 0 && (uint32_t)realoffset < c->csram_words) c->csram[realoffset] = v;  /* SDRAM */
+        return;   /* NAND region is read-only */
     }
     if (c->wr_hist) c->wr_hist[(a >> 10) & 0x3fff]++;   /* RAM-write histogram (per 1K words) */
     c->mem[a] = v;

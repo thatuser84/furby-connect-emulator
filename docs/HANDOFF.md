@@ -810,3 +810,25 @@ NAND offset; then the compositor should read a valid list and terminate.
 
 (Also latent, not yet triggered: writes to 0x200000–0x3fffff go to flat `c->mem` while
 reads route to NAND — a read/write asymmetry to fix if the firmware ever uses SDRAM there.)
+
+## §27 — Root cause + CS/SDRAM fix (MAME-guided)
+
+Reviewing MAME's `generalplus_gpl16250`/`gpl16250_nand` cracked the root cause open:
+
+- MAME boots from the **internal ROM (NAND bootstrap)** and backs the CS space with real
+  **SDRAM** (`m_sdram`/`m_sdram2`, `m_csbase = 0x20000`, `m_vectorbase = 0x6fe0` — matches
+  ours). The banked window: `realoffset = offset + bank*0x200000 - csbase`, read through the
+  CS space (cs0=SDRAM2, cs1=SDRAM, cs2=NAND).
+- **Our emulator HLE-boots (skips the ROM)** and wrongly routed the whole CS window straight
+  to NAND. And GameCode references 0x7810 (bank) 49× but the CS-size regs 0x7820–0x7824
+  **zero times** — it *relies on the boot ROM to configure CS/SDRAM*, which we skip.
+
+**Fixed** the CS window: backed it with writable zero-init SDRAM (`csram`, 4 M-words) +
+NAND for the cs2 region, using MAME's formula/`csbase`. No regressions (boot/FS/IRQ/FIQ/
+display all green); the main loop now survives to **2 events** (was 1) before the deadlock.
+
+**Remaining root (the real wall):** even with correct SDRAM, the firmware never *builds* a
+display list — because it never activates an animation, and the boot-ROM SDRAM/CS
+initialization (which the firmware depends on) isn't emulated. Full fix = emulate the
+GPL16258 boot-ROM bootstrap (SDRAM/CS init) per MAME's `gpl16250_nand`, or drive the
+behavior engine to activate an animation. Both are real, scoped, multi-session work.
