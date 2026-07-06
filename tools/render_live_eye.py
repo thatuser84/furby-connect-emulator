@@ -12,7 +12,7 @@ print("total palette colors available:", len(colors))
 for boff in (64, 4338%len(colors) if colors else 64):
     pass
 # use the preset: bank 64
-bank=FD.palette_bank(colors, 768)  # bank 12 = the blue generic eye
+bank=FD.palette_bank(colors, 8*64)  # bank 8 = the correct dark-navy generic eye (matched to reference)
 FD.write_png("docs/images/furby_eye_LIVE.png", idx, bank, scale=4)
 nz=len([c for c in bank if c!=(0,0,0)])
 print("bank 64: %d non-black colors; sample %s"%(nz,bank[:6]))

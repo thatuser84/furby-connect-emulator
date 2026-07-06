@@ -1184,3 +1184,13 @@ updated to the blue render; `tools/render_live_eye.py` uses bank 12.
 (Note: the eye's active palette bank is chosen at runtime by the firmware's personality state;
 bank 12 = the default generic/BASE look. Wiring the emulator to read the firmware's live bank
 selection — rather than presetting it — is the remaining colour-accuracy polish.)
+
+## §41.3 — Final correct colour: bank 8 (dark navy galaxy eye)
+
+Bank 12 was too bright/cyan. Matched every Base.PAL bank against the actual colours of the
+reference `images/frames/eye1.png` (dark navy `(8,24,80)`, mid-blues `(40,80,144)/(72,128,192)`,
+cyan accents `(0,176,240)`): **bank 8 matched at score 177 vs 4500+ for all others** — a
+decisive match. Bank 8 = the real generic Furby Connect eye: deep black pupil with sparkles,
+purple-blue starfield rim, cyan glow pooling at the bottom, white catchlights. Same
+firmware-selected tiles (playlist 8 frame 0, cels 5,6,7,8); correct palette bank 8.
+`docs/images/furby_eye_LIVE.png` + `tools/render_live_eye.py` finalised to bank 8.
