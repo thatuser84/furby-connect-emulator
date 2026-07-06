@@ -111,6 +111,10 @@ typedef struct {
     uint32_t palwpc[32];        /* distinct LPCs that write the palette 0x7300-0x73ff */
     int palwpc_n;
     uint32_t wwatch_addr; uint32_t wwatch_pc; uint16_t wwatch_val; int wwatch_hit;
+    /* banked-SDRAM (0x200000-0x3fffff) write telemetry */
+    uint64_t bw_count; uint32_t bw_first_addr; uint32_t bw_first_pc;
+    uint32_t bw_last_addr; uint32_t bw_lo; uint32_t bw_hi;
+    uint32_t bw_band_lo; uint32_t bw_band_hi; uint64_t bw_band_count;
 } Cpu;
 
 /* ---- lifecycle ---- */
@@ -216,10 +220,31 @@ void cpu_dlog_reset(Cpu *c) { c->dlog_n = 0; }
 
 uint64_t cpu_nand_reads(Cpu *c) { return c->nand_reads; }
 uint64_t cpu_dma_runs(Cpu *c) { return c->dma_runs; }
+void cpu_poke_banked(Cpu *c, uint32_t cpu_addr, uint16_t v) {
+    /* write into the CS/SDRAM banked window exactly as write16 would, so reads via the
+       0x200000-0x3fffff window see it (used to inject pre-loaded resources). */
+    if (cpu_addr >= 0x200000 && cpu_addr <= 0x3fffff) {
+        uint32_t bank = c->mmio_last[0x7810 - MMIO_LO] & 0x3f;
+        int32_t realoffset = (int32_t)((cpu_addr - 0x200000) + bank * 0x200000u) - (int32_t)c->cs_base;
+        if (realoffset >= 0 && (uint32_t)realoffset < c->csram_words) {
+            c->csram[realoffset] = v; c->csram_written[realoffset] = 1;
+        }
+    }
+}
 void cpu_wwatch_set(Cpu *c,uint32_t a){c->wwatch_addr=a;c->wwatch_hit=0;}
 uint32_t cpu_wwatch_pc(Cpu *c){return c->wwatch_pc;}
 uint32_t cpu_wwatch_val(Cpu *c){return c->wwatch_val;}
 int cpu_wwatch_hit(Cpu *c){return c->wwatch_hit;}
+uint64_t cpu_bw_count(Cpu *c){return c->bw_count;}
+uint32_t cpu_bw_first_addr(Cpu *c){return c->bw_first_addr;}
+uint32_t cpu_bw_first_pc(Cpu *c){return c->bw_first_pc;}
+uint32_t cpu_bw_last_addr(Cpu *c){return c->bw_last_addr;}
+uint32_t cpu_bw_lo(Cpu *c){return c->bw_lo;}
+uint32_t cpu_bw_hi(Cpu *c){return c->bw_hi;}
+void cpu_bw_reset(Cpu *c){c->bw_count=0;c->bw_first_addr=0;c->bw_first_pc=0;c->bw_last_addr=0;c->bw_lo=0;c->bw_hi=0;}
+void cpu_dlog_reset_pub(Cpu *c){c->dlog_n=0;}
+void cpu_bw_band_set(Cpu *c,uint32_t lo,uint32_t hi){c->bw_band_lo=lo;c->bw_band_hi=hi;c->bw_band_count=0;}
+uint64_t cpu_bw_band_count(Cpu *c){return c->bw_band_count;}
 uint32_t cpu_ppudma_n(Cpu *c){return c->ppudma_n;}
 uint32_t cpu_ppudma_get(Cpu *c,uint32_t i,uint32_t k){return (i<64&&k<3)?c->ppudma_log[i][k]:0;}
 uint64_t cpu_cs_reads(Cpu *c) { return c->cs_reads; }
@@ -443,6 +468,11 @@ static inline void write16(Cpu *c, uint32_t a, uint16_t v) {
     if (a >= 0x200000 && a <= 0x3fffff) {
         uint32_t bank = c->mmio_last[0x7810 - MMIO_LO] & 0x3f;
         int32_t realoffset = (int32_t)((a - 0x200000) + bank * 0x200000u) - (int32_t)c->cs_base;
+        if (c->bw_count == 0) { c->bw_first_addr = a; c->bw_first_pc = (((uint32_t)(c->r[SR]&0x3f))<<16)|c->r[PC]; c->bw_lo = a; c->bw_hi = a; }
+        if (a < c->bw_lo) c->bw_lo = a;
+        if (a > c->bw_hi) c->bw_hi = a;
+        c->bw_last_addr = a; c->bw_count++;
+        if (c->bw_band_hi && a >= c->bw_band_lo && a <= c->bw_band_hi) c->bw_band_count++;
         if (realoffset >= 0 && (uint32_t)realoffset < c->csram_words) {
             c->csram[realoffset] = v;                 /* SDRAM: persist the write ... */
             c->csram_written[realoffset] = 1;         /* ... and mark it SDRAM (reads return it) */

@@ -1071,3 +1071,40 @@ unloaded SDRAM."** One cause, every symptom.
 which personality/graphics files load to which banked SDRAM addresses (0x82f7f0, 0x832000, …)
 and pre-load them in `default_furby_cpu`, so the render reads real CEL/PAL data. Everything
 downstream (deadlock, crash, palette, the eye itself) is gated on that single load step.
+
+## §39 — Multi-agent breakthrough: the graphics load is game-driven DMA (not boot-ROM), eye fully located
+
+Ran 4 parallel sub-agents against the §38 root. Two finished and delivered a major correction:
+
+**Agent 1 (MAME boot-ROM RE) — CORRECTS §38:** MAME's gpac800 bootstrap does NOT load
+graphics into SDRAM. It copies exactly ONE code block (header byte 0x15/0x16 → dest, size
+`m_initial_copy_words`) — the GameCode-equivalent — fixes vectors, and jumps. All resource
+loading into CS/SDRAM is done by the **game's own code at runtime via NAND→SDRAM DMA**
+(the transfers `dma_complete_hacks` hooks). So the SDRAM graphics load is **game-driven, not
+boot-ROM** — meaning it is NOT a "needs undumped silicon" problem; our emulator should be
+able to run/capture it. Exact CS layout confirmed: **csbase=0x30000**, cs0=SDRAM2 (0x10000w),
+cs1=SDRAM (`m_sdram`, the bank-4 target), cs2=NAND; banked window `realoffset = offset +
+bank*0x200000 - csbase`, bank = `0x7810 & 0x3f`.
+
+**Agent 3 (NAND file hunt) — EYE FULLY LOCATED:** FAT32 (512 B/sec, 1 sec/clus, data @
+0x1b8000). The eye = the **Base personality**:
+- **Base.CEL @ 0xa2f600** (27 MB, 8823 cels); cel *k* at `0xa2f600 + k*0xC00`.
+- **Base.PAL @ 0x2415200** (43 banks); eye uses **bank 64**.
+- **Base.SPR @ 0x241c200**; **playlist 8 = the eye animation = 14 frames**. Frame 0 = cels
+  5,6,7,8 (→ 128×128), source `0xa33200`, all quarters pal-offset 4338.
+- The SDRAM render buffer **0x832000 holds exactly one 128×128 frame = 0x3000 bytes** (4 cels).
+- `/Graphics/LRGB.*` = LCD test pattern; `All.*`/`DLC.*`/`PALTEST.*` absent from this build.
+
+**Agents 2 & 4** (firmware SDRAM layout / runtime DMA trace) hit the account spend limit
+mid-run, but 2 surfaced the mechanism names before dying: **graphics-handle allocators + a
+`load_group_graphics` at 0x07ed5b** (the runtime resource-load entry to chase).
+
+**Reframed conclusion:** the `[0x534f]=1` forced wake is the **debug-font display path** — a
+0x1004-garbage cascade (the crash index 4100=0x1004 propagates from deep in that path's
+uninitialized state, unaffected by injecting the render buffer). The **retail eye** plays
+playlist 8 via a different, non-debug trigger, and its graphics load through the game's own
+runtime NAND→SDRAM DMA. **Next:** drive/trace `load_group_graphics` (0x07ed5b) on the retail
+path so the firmware DMAs Base.CEL/PAL into SDRAM itself — then the live render draws the eye.
+
+Added primitives this round: `cpu_poke_banked` (inject into the CS/SDRAM window) and banked-
+write telemetry fields.

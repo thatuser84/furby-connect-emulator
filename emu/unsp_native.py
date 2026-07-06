@@ -59,9 +59,20 @@ _sigs = {
     "cpu_dlog_get": (_u32, [_p, _u32, _u32]),
     "cpu_dma_runs": (_u64, [_p]),
     "cpu_wwatch_set": (None,[_p,_u32]),
+    "cpu_poke_banked": (None,[_p,_u32,_u16]),
     "cpu_wwatch_pc": (_u32,[_p]),
     "cpu_wwatch_val": (_u32,[_p]),
     "cpu_wwatch_hit": (ctypes.c_int,[_p]),
+    "cpu_bw_count": (_u64,[_p]),
+    "cpu_bw_first_addr": (_u32,[_p]),
+    "cpu_bw_first_pc": (_u32,[_p]),
+    "cpu_bw_last_addr": (_u32,[_p]),
+    "cpu_bw_lo": (_u32,[_p]),
+    "cpu_bw_hi": (_u32,[_p]),
+    "cpu_bw_reset": (None,[_p]),
+    "cpu_dlog_reset_pub": (None,[_p]),
+    "cpu_bw_band_set": (None,[_p,_u32,_u32]),
+    "cpu_bw_band_count": (_u64,[_p]),
     "cpu_ppudma_n": (_u32, [_p]),
     "cpu_ppudma_get": (_u32, [_p, _u32, _u32]),
     "cpu_set_reador": (None, [_p, _u32, _u16]),
@@ -190,9 +201,20 @@ class NativeCPU:
     def dlog_get(self, i): return [_lib.cpu_dlog_get(self.c, i, k) for k in range(5)]
     def dma_runs(self): return _lib.cpu_dma_runs(self.c)
     def wwatch_set(self,a): _lib.cpu_wwatch_set(self.c,a)
+    def poke_banked(self,a,v): _lib.cpu_poke_banked(self.c,a,v&0xffff)
     def wwatch_pc(self): return _lib.cpu_wwatch_pc(self.c)
     def wwatch_val(self): return _lib.cpu_wwatch_val(self.c)
     def wwatch_hit(self): return _lib.cpu_wwatch_hit(self.c)
+    def bw_count(self): return _lib.cpu_bw_count(self.c)
+    def bw_first_addr(self): return _lib.cpu_bw_first_addr(self.c)
+    def bw_first_pc(self): return _lib.cpu_bw_first_pc(self.c)
+    def bw_last_addr(self): return _lib.cpu_bw_last_addr(self.c)
+    def bw_lo(self): return _lib.cpu_bw_lo(self.c)
+    def bw_hi(self): return _lib.cpu_bw_hi(self.c)
+    def bw_reset(self): _lib.cpu_bw_reset(self.c)
+    def dlog_reset(self): _lib.cpu_dlog_reset_pub(self.c)
+    def bw_band_set(self, lo, hi): _lib.cpu_bw_band_set(self.c, lo, hi)
+    def bw_band_count(self): return _lib.cpu_bw_band_count(self.c)
     def ppudma_n(self): return _lib.cpu_ppudma_n(self.c)
     def ppudma_get(self,i): return [_lib.cpu_ppudma_get(self.c,i,k) for k in range(3)]
     def set_reador(self, a, m):     _lib.cpu_set_reador(self.c, a, m & 0xffff)
