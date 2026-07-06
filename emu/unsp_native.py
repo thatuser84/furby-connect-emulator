@@ -58,6 +58,8 @@ _sigs = {
     "cpu_dlog_n": (_u32, [_p]),
     "cpu_dlog_get": (_u32, [_p, _u32, _u32]),
     "cpu_dma_runs": (_u64, [_p]),
+    "cpu_ppudma_n": (_u32, [_p]),
+    "cpu_ppudma_get": (_u32, [_p, _u32, _u32]),
     "cpu_set_reador": (None, [_p, _u32, _u16]),
     "cpu_set_readclear": (None, [_p, _u32, _u16]),
     "cpu_mmio_reads": (_u32, [_p, _u32]),
@@ -183,6 +185,8 @@ class NativeCPU:
     def dlog_n(self): return _lib.cpu_dlog_n(self.c)
     def dlog_get(self, i): return [_lib.cpu_dlog_get(self.c, i, k) for k in range(5)]
     def dma_runs(self): return _lib.cpu_dma_runs(self.c)
+    def ppudma_n(self): return _lib.cpu_ppudma_n(self.c)
+    def ppudma_get(self,i): return [_lib.cpu_ppudma_get(self.c,i,k) for k in range(3)]
     def set_reador(self, a, m):     _lib.cpu_set_reador(self.c, a, m & 0xffff)
     def set_readclear(self, a, m):  _lib.cpu_set_readclear(self.c, a, m & 0xffff)
     def mmio_reads(self, a):        return _lib.cpu_mmio_reads(self.c, a)

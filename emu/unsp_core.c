@@ -79,6 +79,7 @@ typedef struct {
     uint16_t dma_status;
     uint64_t dma_runs;          /* telemetry */
     uint64_t ppu_dma_runs;
+    uint32_t ppudma_log[64][3]; int ppudma_n;
     /* banked external (CS) window: 0x200000-0x3fffff -> NAND via 0x7810 */
     uint32_t cs_base;           /* word offset into NAND where cs-space starts */
     uint16_t *csram;            /* CS/SDRAM backing (writable), MAME csbase=0x20000 */
@@ -212,6 +213,8 @@ void cpu_dlog_reset(Cpu *c) { c->dlog_n = 0; }
 
 uint64_t cpu_nand_reads(Cpu *c) { return c->nand_reads; }
 uint64_t cpu_dma_runs(Cpu *c) { return c->dma_runs; }
+uint32_t cpu_ppudma_n(Cpu *c){return c->ppudma_n;}
+uint32_t cpu_ppudma_get(Cpu *c,uint32_t i,uint32_t k){return (i<64&&k<3)?c->ppudma_log[i][k]:0;}
 uint64_t cpu_cs_reads(Cpu *c) { return c->cs_reads; }
 void cpu_set_cs_base(Cpu *c, uint32_t base) { c->cs_base = base; }
 
@@ -392,6 +395,7 @@ static inline void write16(Cpu *c, uint32_t a, uint16_t v) {
             uint32_t len = (uint32_t)v + 1;
             for (uint32_t i = 0; i < len; i++)
                 write16(c, (dst + i) & ADDR_MASK, read16(c, (src + i) & ADDR_MASK));
+            if (c->ppudma_n<64){c->ppudma_log[c->ppudma_n][0]=src;c->ppudma_log[c->ppudma_n][1]=dst;c->ppudma_log[c->ppudma_n][2]=len;c->ppudma_n++;}
             c->mmio_last[o] = 0;                 /* transfer complete */
             c->ppu_dma_runs++;
             return;
