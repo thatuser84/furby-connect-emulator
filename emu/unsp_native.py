@@ -54,6 +54,7 @@ _sigs = {
     "cpu_bootcopy": (None, [_p, _u32, _u32, _u32]),
     "cpu_set_ready": (None, [_p, _u32, _u16]),
     "cpu_set_autoclear": (None, [_p, _u32, _u16]),
+    "cpu_set_csram_words": (None, [_p, _u32]),
     "cpu_set_reador": (None, [_p, _u32, _u16]),
     "cpu_set_readclear": (None, [_p, _u32, _u16]),
     "cpu_mmio_reads": (_u32, [_p, _u32]),
@@ -175,6 +176,7 @@ class NativeCPU:
     # peripheral config / introspection
     def set_ready(self, a, v):      _lib.cpu_set_ready(self.c, a, v & 0xffff)
     def set_autoclear(self, a, m):  _lib.cpu_set_autoclear(self.c, a, m & 0xffff)
+    def set_csram_words(self, n): _lib.cpu_set_csram_words(self.c, n)
     def set_reador(self, a, m):     _lib.cpu_set_reador(self.c, a, m & 0xffff)
     def set_readclear(self, a, m):  _lib.cpu_set_readclear(self.c, a, m & 0xffff)
     def mmio_reads(self, a):        return _lib.cpu_mmio_reads(self.c, a)

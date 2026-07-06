@@ -219,6 +219,7 @@ void cpu_bootcopy(Cpu *c, uint32_t dest, uint32_t src, uint32_t nwords) {
 void cpu_set_ready(Cpu *c, uint32_t addr, uint16_t val) {
     if (addr >= MMIO_LO && addr <= MMIO_HI) c->mmio_ready[addr - MMIO_LO] = val;
 }
+void cpu_set_csram_words(Cpu *c, uint32_t n) { c->csram_words = n; }
 void cpu_set_autoclear(Cpu *c, uint32_t addr, uint16_t mask) {
     if (addr >= MMIO_LO && addr <= MMIO_HI) c->mmio_autoclear[addr - MMIO_LO] = mask;
 }
