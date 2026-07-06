@@ -986,6 +986,28 @@ static int hle_dispatch(Cpu *c, int id) {
         c->r[SP] = (uint16_t)(sp + 2);
         return 1;
     }
+    if (id == 6) {
+        /* 0x08fc17 display-list child-count reader: replicate its far-read
+           (0x08fe15) but CLAMP an absurd count to 0, so a garbage/unbuilt list
+           cannot drive the recursive compositor into an infinite walk (§26
+           deadlock). Real display nodes have small counts; garbage reads 0x1004+. */
+        uint16_t lo = c->mem[(uint16_t)(sp + 3)];
+        uint16_t hi = c->mem[(uint16_t)(sp + 4)];
+        uint16_t val;
+        if (hi >= 0x20) {
+            c->mmio_last[0x7810 - MMIO_LO] = (uint16_t)(hi >> 5);
+            uint32_t addr = ((((uint32_t)((hi & 0x3f) | 0x20)) << 16) | lo) & ADDR_MASK;
+            val = read16(c, addr);
+        } else {
+            val = read16(c, ((((uint32_t)hi) << 16) | lo) & ADDR_MASK);
+        }
+        if (val > 256) val = 0;         /* clamp garbage -> empty node */
+        c->r[R1] = val;
+        c->r[SR] = c->mem[(uint16_t)(sp + 1)];
+        c->r[PC] = c->mem[(uint16_t)(sp + 2)];
+        c->r[SP] = (uint16_t)(sp + 2);
+        return 1;
+    }
     if (id == 4) {
         /* open(far_ptr, mode): resolve the file, allocate a VFS handle carrying its
          * start cluster/size/pos; return handle in r1 (0xffff = fail). */

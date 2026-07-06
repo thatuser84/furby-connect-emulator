@@ -892,3 +892,27 @@ event loop return so the dispatcher re-runs. That single transition is the whole
 **Next (precise, small):** find state 0's loop-exit / `[0x534f]` producer — the sensor/wake
 input the firmware reads — and supply it. Then the machine marches 0→3 on its own and plays
 playlist 8 through the real driver. This is no longer a search; it's one identified gate.
+
+## §30 — MASSIVE BREAKTHROUGH: the firmware runs its whole wake sequence live
+
+Got the real firmware to march its entire wake/boot behavior sequence and drive the
+display hardware — the thing that was a black box all project. The recipe:
+
+1. **Break the compositor deadlock** — HLE `id=6` on `0x08fc17` clamps absurd display-list
+   child-counts to 0, so an unbuilt list can't infinite-loop. This alone let the state
+   machine advance **0 → 2** on its own.
+2. **Supply the wake reason** — `poke [0x534f]=1`. State 2 then marches **2 → 3 → 4**.
+3. **Emulate the eye-LCD controller status** — `set_autoclear(0x7961,0x30)` (busy clears) +
+   `set_reador(0x7961,0x80)` (ready set). State 4's eye-LCD driver (`0x080c2d`) then
+   completes its transfer and marches **4 → 5**.
+
+Observed live: **SPI TX `0x7942` fired ~1900 writes** (LCD command/init stream, 8 distinct
+values), **PPU enable `0x707f` toggled 14×**, and a **192-entry palette loaded**. The full
+display pipeline executes — states, eye-LCD driver, SPI, PPU — end to end.
+
+**Honest limit:** the *content* is garbage — the palette is a 3-value repeat
+(`0x0441/0x4110/0x1004`) and the animation id reads `0x1004`. The graphics are being read
+from the wrong CS/NAND offset (the §27/§26.1 banked-window mapping), so the pipeline draws
+noise, not the eye. **Final piece:** fix the graphics CS/NAND read offset so the real
+CEL/PAL data loads — then the same live pipeline draws the actual eye. Everything upstream
+(state machine, wake, eye-LCD handshake, SPI) is now proven working.
