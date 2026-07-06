@@ -1105,6 +1105,45 @@ static int hle_dispatch(Cpu *c, int id) {
         c->r[SP] = (uint16_t)(sp + 2);
         return 1;
     }
+    if (id == 7) {
+        /* 0x0785de load_file(name_farptr[sp+3:4], dest_farptr[sp+5:6]): resolve the
+         * file in the FAT and blit its whole contents into the dest CS/SDRAM buffer,
+         * replicating the resource load the HLE boot otherwise leaves undone (the
+         * render reads these bank-4 SDRAM buffers; the firmware never fills them here).
+         * dest far-ptr [off,seg] decoded like the far-read 0x08fe15:
+         *   bank = seg>>5 (selects 0x7810), ds = (seg&0x3f)|0x20, CPU addr = (ds<<16)|off. */
+        uint16_t nlo = c->mem[(uint16_t)(sp + 3)], nhi = c->mem[(uint16_t)(sp + 4)];
+        uint16_t dlo = c->mem[(uint16_t)(sp + 5)], dhi = c->mem[(uint16_t)(sp + 6)];
+        uint32_t nptr = (((uint32_t)nhi << 16) | nlo) & ADDR_MASK;
+        uint32_t cl, sz; int ok = 0;
+        if (vfs_resolve(c, nptr, &cl, &sz) && sz > 0) {
+            uint32_t bank = (dhi >> 5) & 0x3f;
+            uint32_t ds   = (dhi & 0x3f) | 0x20;
+            uint32_t dbase = ((ds << 16) | dlo) & ADDR_MASK;
+            c->mmio_last[0x7810 - MMIO_LO] = (uint16_t)bank;   /* match the read's bank */
+            uint32_t nwords = sz / 2;
+            for (uint32_t i = 0; i < nwords; i++) {
+                uint32_t pos = 2 * i;
+                uint32_t ci = pos / FAT_BYTES_PER_SEC, off = pos % FAT_BYTES_PER_SEC;
+                uint32_t ccl = cl;
+                for (uint32_t k = 0; k < ci && ccl >= 2 && ccl < 0x0ffffff8u; k++)
+                    ccl = fat_next_cluster(c, ccl);
+                uint32_t nb = FAT_DATA_START_BYTE + (ccl - 2) * FAT_BYTES_PER_SEC + off;
+                uint16_t w = (c->nand && nb + 1 < c->nand_size)
+                           ? (uint16_t)(c->nand[nb] | (c->nand[nb + 1] << 8)) : 0;
+                write16(c, (dbase + i) & ADDR_MASK, w);
+            }
+            ok = 1;
+            if (hle_fs_debug)
+                fprintf(stderr, "[HLE load_file] nptr=%06x -> dest %06x (%u bytes)\n",
+                        nptr, dbase, sz);
+        }
+        c->r[R1] = ok ? 0 : 0xffff;
+        c->r[SR] = c->mem[(uint16_t)(sp + 1)];
+        c->r[PC] = c->mem[(uint16_t)(sp + 2)];
+        c->r[SP] = (uint16_t)(sp + 2);
+        return 1;
+    }
     if (id == 5) {
         /* read-byte(handle) [SP+3], fgetc-style: return next file byte in r1,
          * 0xffff at EOF. Follows the cluster chain from the handle. */

@@ -1137,3 +1137,26 @@ render (fed by these + per-frame CEL tiles) draws the real eye.
 Primitives added by the sub-agents: `cpu_poke_banked`, banked-write telemetry
 (`bw_count/bw_first_pc/bw_band_*`), `dlog_reset`. NAND file offsets (Agent 3): BASE.PAL
 @0x2415200 (5504 B), BASE.SPR @0x241c200 (437080 B), BASE.CEL @0xa2f600 (cel k at +k*0xC00).
+
+## §41 — 🎉 THE EYE RENDERS FROM THE RUNNING FIRMWARE
+
+Implemented the loader HLE (`id=7` on `0x0785de`): resolve the file in the FAT and blit its
+bytes to the dest CS/SDRAM far-pointer (bank = seg>>5, addr = ((seg&0x3f)|0x20)<<16 | off) —
+exactly the file→SDRAM copy the HLE boot was missing (§40). Observed it fire live:
+`BASE.PAL→0x22def0 (5504B)`, `BASE.SPR→0x3b7610 (437080B)`, DebugFont→0x22f7f0, etc.
+
+**Result — the whole thing pays off:**
+- The `0x1004` garbage is GONE: with real SDRAM data, the render index/count/handler are
+  valid, the array-overflow (§37) never happens, and the **`0x330000` crash is eliminated**.
+- The firmware runs clean through state 5 for 40+ frames, **63-colour real palette** (was 3),
+  12 PPU sprites, SPI streaming.
+- The PPU sprite list references **tiles 5,6,7,8** — exactly playlist-8 frame-0's four
+  quarter-cels (§39). The firmware composes the **128×128 eye itself.**
+- Rendered `docs/images/furby_eye_LIVE.png`: an unmistakable **eye — circular iris, concentric
+  rings, central pupil** — from the firmware-composed cels. (Palette bank tuning still owed;
+  colours read green vs blue, structure is correct.)
+
+This is the milestone the whole project aimed at: the discontinued Furby Connect's REAL
+firmware, emulated from scratch, **driving its own eye graphics to a rendered frame.**
+Repro: `tools/render_live_eye.py`. Remaining polish: palette-bank match for true colour, and
+wiring the loader HLE into default_furby_cpu so it's on by default.
