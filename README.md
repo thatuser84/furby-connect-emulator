@@ -34,6 +34,7 @@ MAME's `generalplus_gpl16250` reference. No prior emulator of this toy existed.
 | Audio SACM → PCM decode | 🔬 frontier | proprietary entropy-coded codec; container done, PCM decode open |
 | Single-file **FurbyROM (.fby)** | ✅ working | pack GameCode + NAND into one compressed file; `run.py --rom` boots it |
 | Self-test / **diagnostic** | ✅ working | `run.py --diag` runs every subsystem and reports plain-English PASS/FAIL |
+| **Desktop GUI** | ✅ working | `run.py --gui` — open a ROM, it boots & runs; live eye viewport, log, and a debug console for custom instructions |
 
 ### The eye 👁️
 
@@ -51,6 +52,18 @@ full 14-frame blink is in [`docs/images/furby_eye_anim.gif`](docs/images/furby_e
 # boot the firmware and render its live eye (still + animation)
 python3 tools/render_live_eye.py --gamecode GameCode.bin --nand nand.bin --png eye.png --gif eye.gif
 ```
+
+### GUI
+
+A plain desktop front-end (like an NES emulator — no toy chrome):
+
+```bash
+python3 run.py --gui
+```
+
+Open a ROM (a `.fby`, or a `GameCode.bin` + its NAND), then **Boot** and **Wake + Render**.
+The window shows the live eye, a scrolling log, and a debug console (`peek`/`poke`/`run`/
+`frame`/`dis`/… — type `help`) for running custom instructions against the live machine.
 
 The eye-graphics format (`CEL`/`PAL`/`SPR`) and the runtime load path are documented in
 [`docs/HARDWARE.md`](docs/HARDWARE.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). An
@@ -71,8 +84,9 @@ emu/unsp_disasm.py   µ'nSP ISA 1.3 disassembler
 emu/unsp_trace.py    recursive-descent tracer
 emu/gpl16250_regs.py peripheral register names
 emu/furby_display.py the eye "PPU" — decodes the CEL/PAL cell-graphics into eye frames
-run.py               friendly runner (boot + drive display + report; or --eyes to
-                     dump a personality's eye animation)
+emu/furby_gui.py     desktop GUI emulator (open ROM -> runs; live eye, log, debug console)
+run.py               friendly runner (--gui for the desktop app; --eyes to dump an
+                     eye animation; boot + drive display + report otherwise)
 furby_eye.html       standalone live viewer: the eye animating in true color
 tools/ftl_reconstruct.py  rebuild the logical NAND from a raw physical dump (+OOB), byte-exact
 tools/amf_extract.py      unpack a personality's .AMF audio megafile into .a18 clips

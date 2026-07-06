@@ -77,7 +77,15 @@ def main():
     ap.add_argument("--eyes-out", default="eyes", help="output dir for --eyes frames")
     ap.add_argument("--monitor", action="store_true", help="live terminal monitor of the running emulator")
     ap.add_argument("--diag", action="store_true", help="run the self-test / diagnostic and exit")
+    ap.add_argument("--gui", action="store_true", help="launch the desktop GUI emulator")
     args = ap.parse_args()
+
+    # --gui: launch the desktop front-end (open a ROM from the window)
+    if args.gui:
+        ensure_built()
+        import furby_gui
+        furby_gui.main()
+        return
 
     # --eyes: run the display PPU (no firmware boot needed)
     if args.eyes:

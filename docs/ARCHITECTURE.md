@@ -18,6 +18,7 @@ The emulator is split between a native core and a Python layer.
 | `emu/unsp_cpu.py` | Pure-Python reference core, used to validate the native core (bit-for-bit over 250k steps). |
 | `emu/unsp_disasm.py` | µ'nSP ISA disassembler. |
 | `emu/furby_display.py` | Decoder for the CEL/PAL/SPR eye-graphics format (used to render captured frames). |
+| `emu/furby_gui.py` | Desktop GUI (`run.py --gui`): loads a ROM, drives boot/wake, shows the live eye, a log, and a debug console. |
 
 Execution model: `default_furby_cpu(gamecode, nand)` loads the firmware, wires the NAND
 image to the controller, installs the HLE hooks, and resets to the boot entry. The caller
