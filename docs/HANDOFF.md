@@ -1108,3 +1108,32 @@ path so the firmware DMAs Base.CEL/PAL into SDRAM itself — then the live rende
 
 Added primitives this round: `cpu_poke_banked` (inject into the CS/SDRAM window) and banked-
 write telemetry fields.
+
+## §40 — Full load spec decoded (both agents finished): manifest + loader chain + exact SDRAM dests
+
+**Resource manifest** at GameCode `0x097766` (stride 0x1a words/group; per group, far-pointers
+to filename strings for PAL,CEL,SPR,AMF,APL,XLS,LPS,MTR,SEQ,FIR,FIT,CMR,INT). Group map:
+**0=LRGB, 1=PALTEST, 2=BASE, 3=DJ, 4=Princess, 5=Ninja, 6=Pirate, 7=Cat, 8=Popstar, 9=DLC, 10=All.**
+
+**Loader chain:** `load_group_graphics(0x07ed5b)(group)` →
+- `0x07ebb7 load_PAL(group)` → dest **0x22def0** (bank 4; `0x82:0xdef0`)
+- `0x07ec1b load_SPR(group)` → dest **0x3b7610** (bank 3; `0x7b:0x7610`)
+- CEL bulk-loaded only for group 0 (LRGB, 12 KB → 0x25a170); personality CEL (BASE.CEL 27 MB)
+  is **streamed per-frame** into the render tile buffer **0x232000** by tile-cache `0x0791cd`.
+Each `load_*` → `0x0785de(name_farptr, dest_farptr)` → `0x090f7f open` → `0x08ec8c stat` →
+`0x090000 block-read` → `0x091c93 close`. **Retail eye = group 2 (BASE)**, called at
+`0x061629`/`0x0739a7`/… with r3=2. SDRAM allocators: `0x07eb5d` (seg 0x82 bank-4 slots),
+`0x07eb8a` (segs 0x66–0x7b).
+
+**Empirical (Agent 4):** the firmware DOES open `BASE.PAL/BASE.SPR/BASE.CEL/BASE.XLS`
+(+ DebugFont) once frames are driven — but **zero writes ever reach the bank-4 SDRAM render
+buffers** (0x232000, 0x22f7f0, 0x22def0 band); all 2048 boot DMAs are NAND→0x1840 page-buffer
+only. So the file→SDRAM render-buffer copy is genuinely not happening in our HLE boot — it's
+the `0x090000` block-read landing somewhere other than the SDRAM dest, or a skipped boot-ROM
+copy. **The fix:** HLE the loader (`0x0785de` / `0x090000`) to blit the opened file's bytes to
+its `dest_farptr` SDRAM address — then BASE.PAL→0x22def0, BASE.SPR→0x3b7610 populate and the
+render (fed by these + per-frame CEL tiles) draws the real eye.
+
+Primitives added by the sub-agents: `cpu_poke_banked`, banked-write telemetry
+(`bw_count/bw_first_pc/bw_band_*`), `dlog_reset`. NAND file offsets (Agent 3): BASE.PAL
+@0x2415200 (5504 B), BASE.SPR @0x241c200 (437080 B), BASE.CEL @0xa2f600 (cel k at +k*0xC00).
