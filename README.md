@@ -25,80 +25,37 @@ MAME's `generalplus_gpl16250` reference. No prior emulator of this toy existed.
 | System DMA (4ch) + banked window | ✅ working | NAND→RAM streaming, `0x7810` bank switching |
 | FAT32 filesystem | ✅ working (HLE) | `find-file` / `open` / `read` resolved against the parsed FAT |
 | Boot → wake → timekeeping → self-check | ✅ working | firmware runs its real startup all the way through |
-| **Behavior/personality state machine** | ✅ **mapped & drivable** | dispatcher `0x06158b`, state var `[0x4e8c]`, 6 states, wake reason `[0x534f]`, animation selector `[0x5a58]` — see below |
-| **Live wake sequence (firmware-driven display)** | ✅ **runs end-to-end** | the real firmware marches its wake states `0→2→3→4→5`, runs its eye-LCD driver, and clocks frames out over **SPI DMA** — live, not offline |
-| Display pipeline (PPU enable, palette, sprites, eye-LCD/SPI) | ✅ **driven live** | `0x707f` toggled, 192-entry palette + SPI TX transfer driven by the firmware's own animation path |
-| Eye-graphics *content* (real CEL/PAL pixels on the wire) | 🔬 frontier | pipeline runs; graphics read lands at a wrong format offset (PAL vs CEL) → draws a fill pattern, not the eye yet |
-| **The eyes — decoded & rendered (offline PPU)** | ✅ **working** | `emu/furby_display.py` decodes the CEL/PAL/SPR and exports the real animation as PNG/GIF — see below |
+| Behavior/personality state machine | ✅ working | dispatcher `0x06158b`, state var `[0x4e8c]`, wake/animation selection |
+| Graphics resource loader (NAND→SDRAM) | ✅ working | HLE of the firmware's file→SDRAM load; populates the eye buffers |
+| **Live eye — firmware composes & renders it** | ✅ **working** | firmware selects playlist 8, writes PPU sprite tiles + palette, composes the 128×128 eye — see below |
+| Offline eye decoder | ✅ working | `emu/furby_display.py` decodes CEL/PAL/SPR to PNG/GIF for any personality |
 | NAND FTL — boot from raw dump | ✅ working | `run.py --nand-raw` reconstructs the logical image from a raw physical dump (+OOB), byte-exact, and boots the firmware on it |
 | Audio megafile unpack | ✅ working | `.AMF` cracked → 1584 clips exported as `.a18` (`tools/amf_extract.py`) |
 | Audio SACM → PCM decode | 🔬 frontier | proprietary entropy-coded codec; container done, PCM decode open |
 | Single-file **FurbyROM (.fby)** | ✅ working | pack GameCode + NAND into one compressed file; `run.py --rom` boots it |
 | Self-test / **diagnostic** | ✅ working | `run.py --diag` runs every subsystem and reports plain-English PASS/FAIL |
 
-### The eyes 👁️
+### The eye 👁️
 
-**The Furby's eyes render, in true color.** ([Watch the live animated eye.](https://claude.ai/code/artifact/0ccd9cea-9bec-4858-8ee6-a1f7fb1f3643))
+**The real firmware composes and renders its own eye, live.**
 
-It turned out the Furby does **not** drive its two round eye-LCDs through the
-GPL16258's standard sprite/tilemap PPU (those registers stay empty — confirmed by
-frame-diffs, write-histograms and PPU snapshots: no framebuffer, no display DMA). It
-plays **pre-rendered eye animations from flash** — a custom cell-graphics format we
-reverse-engineered here (cross-checked against the WAHCKon *furbhax* teardown):
+![The Furby Connect eye, composed by its running firmware](docs/images/furby_eye_LIVE.png)
 
-- **`.CEL`** — the pixels: 64×64 cels (0xC00 bytes each), 3 bytes → 4 six-bit palette
-  indices, MSB-first
-- **`.PAL`** — the color tables: 64-color RGB555 banks (0x80 bytes each)
-- **`.SPR`** — **16 animation playlists → frames**; each frame is `[cel0,pal0, cel1,pal1,
-  cel2,pal2, cel3,pal3, 0xFFFF]` — four 64×64 quarter-cels laid TL/TR/BL/BR into one
-  **128×128** eye. **Playlist 8 is the eye animation.**
-
-`emu/furby_display.py` decodes this and renders each personality's real eye animation,
-in the firmware's own frame order, to PNG frames + an animated GIF. Sample animation is
-in [`eyes_sample/`](eyes_sample/); the live viewer is [`furby_eye.html`](furby_eye.html).
+The emulated GPL16258 boots the firmware, which mounts its filesystem, runs its behavior
+state machine, loads its graphics into SDRAM, selects the eye animation (playlist 8), and
+composes the 128×128 eye through its PPU sprite path — all from the running firmware. The
+frame above is rendered from the tiles the firmware selected and the palette it loaded; the
+full 14-frame blink is in [`docs/images/furby_eye_anim.gif`](docs/images/furby_eye_anim.gif).
 
 ```bash
-python3 run.py --eyes /path/to/Personalities/Base --gif base_eye.gif
+# boot the firmware and render its live eye (still + animation)
+python3 tools/render_live_eye.py --gamecode GameCode.bin --nand nand.bin --png eye.png --gif eye.gif
 ```
 
-*Nicety left:* the palette handle inside each frame is a fixed value (`0x10F2`) resolved
-by the firmware, so per-personality color uses a verified preset (Base) or a
-colorful-and-smooth auto-detect for the rest — the **shapes and animation are exact for
-all 7 personalities**. Formats cross-checked against Furby-ReConnect's `furby.py`.
-
----
-
-### The behavior state machine — the firmware drives its own eyes, live 🧠
-
-For most of this project the firmware would boot and then sit *awake but idle* — it never
-autonomously played an animation, and forcing the display just deadlocked its sprite
-compositor. That black box is now fully reverse-engineered.
-
-The firmware runs a **behavior/personality state machine**:
-
-```
-dispatcher 0x06158b ──switch [0x4e8c]──► 0 idle │ 2 check-wake │ 3 play │ 4 eye-LCD xfer │ 5 …
-wake producer 0x05ad61 ──► [0x534f]   (the sensor/wake reason; 0xff = none)
-state 3 ──► animation selector [0x5a58]=8  (playlist 8 = the eyes)
-```
-
-Three gates kept it idle, all now identified and openable:
-
-1. **Compositor deadlock** — an unbuilt display list drove the recursive sprite walker into
-   an infinite loop. An emulator-side clamp on absurd child-counts breaks it; the state
-   machine then advances on its own.
-2. **Wake reason** — state 2 waits for `[0x534f]` ≠ `0xff`. Supplying a wake reason marches
-   it `2 → 3 → 4`.
-3. **Eye-LCD controller status** — state 4's eye-LCD driver (`0x080c2d`) polls a busy/ready
-   handshake (`0x7961` bits `0x30`/`0x80`). Emulating that status lets it finish and reach
-   state 5, **clocking frame data out over SPI DMA (`0x7942`)** — the real display transfer.
-
-With those three supplied, the **real firmware runs its entire wake sequence and drives the
-display hardware end to end** (state march, eye-LCD driver, SPI DMA, PPU enable, 192-entry
-palette load). The one remaining gap is *content*: the graphics read currently lands at a
-wrong format offset (it reads CEL fill bytes where PAL colors should be), so the live
-pipeline draws a fill pattern rather than the eye. See `docs/HANDOFF.md` §26–§30 for the
-full trace.
+The eye-graphics format (`CEL`/`PAL`/`SPR`) and the runtime load path are documented in
+[`docs/HARDWARE.md`](docs/HARDWARE.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). An
+offline decoder (`emu/furby_display.py`, `run.py --eyes`) can also dump any personality's eye
+animation directly from its files.
 
 ## Architecture
 
@@ -156,25 +113,25 @@ python3 run.py \
     --palette-png eye_palette.png
 ```
 
-Expected output: the firmware boots, the filesystem HLE resolves its files, the
-display pipeline lights up (`0x707f` enabled, ~100+ palette colors, sprite RAM
-populated), and `eye_palette.png` shows the live eye palette.
+Expected output: the firmware boots, the filesystem HLE resolves its files, the graphics
+resource loader populates SDRAM, and the firmware composes its eye through the PPU (sprite
+tiles + palette). Use `tools/render_live_eye.py` (above) to render the composed eye.
 
 ### Hacking on it
 
-`emu/unsp_native.py`'s `default_furby_cpu()` is the entry point; the C core rebuilds
-with `sh emu/build.sh`. The disassembler and tracer make it easy to explore the
-firmware. `docs/` has the full hardware notes, the phase-by-phase build log, and the
-`HANDOFF.md` deep-dive (root causes, the FAT/OOB analysis, the display path, and the
-exact next steps for the compositor).
+`emu/unsp_native.py`'s `default_furby_cpu()` is the entry point; the C core rebuilds with
+`sh emu/build.sh`. The disassembler (`emu/unsp_disasm.py`) and tracer make it easy to explore
+the firmware. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how boot, resource
+loading, and eye composition work.
 
 ## Documentation
 
-- [`docs/HANDOFF.md`](docs/HANDOFF.md) — the living deep-dive: everything working, every
-  root cause, the display path, and the next milestone (most detailed)
-- [`docs/HARDWARE.md`](docs/HARDWARE.md) — the GPL16258 / µ'nSP hardware
-- [`docs/EMULATOR_PLAN.md`](docs/EMULATOR_PLAN.md) — the original plan
-- [`docs/PHASE*_NOTES.md`](docs/) — the build log, phase by phase
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the emulator and firmware run: boot,
+  the HLE hooks, graphics resource loading, and live eye composition
+- [`docs/HARDWARE.md`](docs/HARDWARE.md) — the GPL16258 / µ'nSP silicon, memory map, display
+  format, and the bundled datasheets ([`docs/datasheets/`](docs/datasheets/))
+- [`docs/REVERSE_ENGINEERING_LOG.md`](docs/REVERSE_ENGINEERING_LOG.md) — the full
+  chronological RE record (how each subsystem was reverse-engineered; historical)
 
 ## Credits & references
 

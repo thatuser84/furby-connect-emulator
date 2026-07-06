@@ -1,3 +1,7 @@
+> **Historical record.** This is the chronological reverse-engineering log kept during
+> development. For current, cleaned-up documentation see [`ARCHITECTURE.md`](ARCHITECTURE.md)
+> and [`HARDWARE.md`](HARDWARE.md).
+
 # Furby Connect Emulator — Handoff Brief / Expert Prompt
 
 You are picking up a **from-scratch emulator of the Furby Connect (2016) toy**,

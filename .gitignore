@@ -23,3 +23,8 @@ __pycache__/
 !eyes_sample/
 !eyes_sample/*.png
 !eyes_sample/*.gif
+
+# keep hardware datasheets + doc images (showcase, not scratch)
+!docs/datasheets/*.pdf
+!docs/images/*.png
+!docs/images/*.gif
