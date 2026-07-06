@@ -58,8 +58,12 @@ python3 tools/render_live_eye.py --gamecode GameCode.bin --nand nand.bin --png e
 A plain desktop front-end (like an NES emulator — no toy chrome):
 
 ```bash
-python3 run.py --gui
+./furby-gui          # or:  python3 run.py --gui
 ```
+> **macOS note:** Apple's *system* Tk (8.5) is broken on some macOS builds and cannot open a
+> window. Use a Python with Tk **8.6** (e.g. Miniconda / python.org) — the `./furby-gui` launcher
+> finds one automatically.
+
 
 Open a ROM (a `.fby`, or a `GameCode.bin` + its NAND), then **Boot** and **Wake + Render**.
 The window shows the live eye, a scrolling log, and a debug console (`peek`/`poke`/`run`/
