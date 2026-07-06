@@ -765,3 +765,27 @@ into the FIQ handler 0x08f1df and the firmware stays stable. Honest note: the tw
 handlers are an empty stub (0x08f1dc) and a 0x78a1 fast-timer reader (0x08f1df) — driving
 it does **not** trigger the eye animation, so this is a correctness fix, not the behavior
 trigger (that remains the open behavior-state-machine RE from §22–§24).
+
+## §26 — THE core issue: display-compositor deadlock on an unbuilt display list
+
+Root-caused why the eyes never render (traced end to end):
+
+1. A frame event → the main loop runs the **display compositor**, a recursive display-list
+   tree-walker (`0x067f00`/`0x067eb0`), reading each node's child-count via `0x08fc17`→
+   the far-read `0x08fe15` (0x7810-banked).
+2. The node it reads is **garbage**: child-count `0x1004` (4100), far-pointers with a
+   nonsense bank (`0x3071`). The **root display-list pointer is uninitialised** — the list
+   was never built.
+3. The 4100-wide × recursive walk is effectively **infinite** and never returns, so the
+   **main event loop is blocked**. Measured: consumer stuck at 1 while producer climbs to
+   30, unchanged over 80M+ instructions.
+4. Deadlocked → no further events processed → the firmware can never set up a real
+   animation → the display never renders.
+
+So it was never "idle" — it's a **hard deadlock** the instant the display is driven before
+the firmware has built a display list. `run.py --diag` now detects it (main-loop liveness).
+
+**Next thread:** find why the display list is never built — the list-builder and its
+trigger, and whether a subsystem the firmware waits on (audio DSP / motor / a "graphics
+ready" handshake) isn't satisfied in the emulator, gating the build. Fix that and the
+compositor gets a valid list → terminates → the pipeline renders.

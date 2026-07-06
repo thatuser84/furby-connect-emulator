@@ -120,6 +120,21 @@ def build_checks(d, args):
         return ok, (f"display pipeline live: {after} palette entries loaded on frame heartbeat" if ok
                     else "display pipeline loaded no palette (frame IRQ not driving the compositor)")
 
+    def c_liveness():
+        import struct as _st
+        cpu = state["cpu"]
+        def ev():
+            return _st.unpack("<HH", bytes(cpu.read_block(0x5a44, 8))[2:6])
+        for _ in range(8):
+            cpu.raise_irq(5); cpu.run(200_000)
+        cons, prod = ev()
+        # healthy: the main loop consumes events (consumer tracks producer).
+        # deadlock: compositor spins on an unbuilt display list -> consumer stuck.
+        ok = prod == 0 or cons >= max(1, prod - 1)
+        return ok, (f"main loop live (event queue cons={cons} prod={prod})" if ok
+                    else f"DEADLOCK: consumer stuck at {cons} while producer={prod} — "
+                         f"compositor spinning on an unbuilt display list (§26)")
+
     def c_eyes():
         if not args.personalities:
             return True, "skipped (no --personalities given)"
@@ -154,6 +169,7 @@ def build_checks(d, args):
         ("IRQ dispatch", c_irq),
         ("FIQ dispatch", c_fiq),
         ("display pipeline", c_display),
+        ("main-loop liveness", c_liveness),
         ("eye decoder", c_eyes),
         ("ROM container", c_rom),
     ]
