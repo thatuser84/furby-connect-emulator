@@ -849,3 +849,20 @@ that event is what produces the §26 compositor deadlock.
 
 Everything cleanly-fixable is fixed (IRQ, FIQ, CS/SDRAM, boot defaults). The eyes need
 the behavior engine driven by a synthetic sensor/wake event — the genuine open frontier.
+
+## §28 — Both display paths confirmed; single root (animation activation)
+
+Chased the alternate theory that the eyes bypass the PPU (per README). Confirmed:
+- **PPU sprite compositor** (0x067eb0 tree-walker): the path I deadlock by driving frames.
+- **Eye-LCD driver**: GPIO bit-banged over P_IOB/P_IOC ("LCD lines", regs 0x7869/0x7050/
+  0x786a etc.) — a genuinely separate subsystem, NOT the PPU.
+
+Both are gated on the **same single condition**: an animation being active. With none
+active: the PPU compositor walks an unbuilt list (§26 deadlock) and the eye-LCD driver
+never clocks a frame out. So every subsystem traced this campaign — PPU, eye-LCD, event
+loop, compositor — converges on one root: **the behavior/personality state machine never
+selects an animation.** The 14 behavior states each run the generic event loop; the
+firmware sits in an idle one, waiting for a real-world input to transition.
+
+That state machine (mood engine + XLS action tree + sequence player) is the sole
+remaining frontier. Everything beneath it is verified correct and fixed.
