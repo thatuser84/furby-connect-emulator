@@ -1031,3 +1031,22 @@ which is absent from retail flash, so its buffer is never written → stays NAND
 (`0x1004`) → the crash. Confirmed: the forced-wake sequence is dev/debug code; the retail
 idle eye is the clean state-2-wait path, reachable only by a genuine wake event (sensor/BLE)
 that hasn't been synthesized. The SDRAM floor is now correct under whichever path runs.
+
+## §37 — Crash root: array-overflow corrupts a handler pointer (correction: file exists)
+
+Correction to §35: `DebugFont_Pal.bin` **does exist** in flash (8.3 `DEBUGF~1`, LFN
+`DebugFont`) — the earlier "missing file" reading was an ASCII-search artifact; the FAT
+stores it 8.3/UTF-16. So the file opens/loads fine and the `0x1004`/`0x0441` values are a
+real (simple) debug-font palette, not read garbage.
+
+Traced the `0x330000` crash to its true mechanism with a write-watchpoint:
+- crash = `0x06cf1c call mr` → dispatches the handler pointer at `[0x5a4c]`
+- `[0x5a4c]` is set correctly (`0x07:0xee56`) by `set_handler` (0x06d3f8, one caller), then
+  **overwritten** — a state-array copy loop `0x0791cd` (bases `0x58eb`/`0x58fb`) writes at
+  `0x079291` with a too-large index and **overflows into `[0x5a4c]`**, storing palette
+  values there. The corrupted handler is then called → jump into uninitialized memory
+  before GameCode → the header-as-code cascade → `0x330000`.
+
+This is a memory-corruption on the dev boot-display path (state 4/5). It does not affect the
+clean retail idle-eye path (state-2 wait). Added `cpu_wwatch_*` (RAM write-watchpoint) for
+this class of hunt.

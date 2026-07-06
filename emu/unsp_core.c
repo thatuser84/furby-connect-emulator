@@ -110,6 +110,7 @@ typedef struct {
     int snap_valid;
     uint32_t palwpc[32];        /* distinct LPCs that write the palette 0x7300-0x73ff */
     int palwpc_n;
+    uint32_t wwatch_addr; uint32_t wwatch_pc; uint16_t wwatch_val; int wwatch_hit;
 } Cpu;
 
 /* ---- lifecycle ---- */
@@ -215,6 +216,10 @@ void cpu_dlog_reset(Cpu *c) { c->dlog_n = 0; }
 
 uint64_t cpu_nand_reads(Cpu *c) { return c->nand_reads; }
 uint64_t cpu_dma_runs(Cpu *c) { return c->dma_runs; }
+void cpu_wwatch_set(Cpu *c,uint32_t a){c->wwatch_addr=a;c->wwatch_hit=0;}
+uint32_t cpu_wwatch_pc(Cpu *c){return c->wwatch_pc;}
+uint32_t cpu_wwatch_val(Cpu *c){return c->wwatch_val;}
+int cpu_wwatch_hit(Cpu *c){return c->wwatch_hit;}
 uint32_t cpu_ppudma_n(Cpu *c){return c->ppudma_n;}
 uint32_t cpu_ppudma_get(Cpu *c,uint32_t i,uint32_t k){return (i<64&&k<3)?c->ppudma_log[i][k]:0;}
 uint64_t cpu_cs_reads(Cpu *c) { return c->cs_reads; }
@@ -376,6 +381,9 @@ static inline uint16_t read16(Cpu *c, uint32_t a) {
 }
 static inline void write16(Cpu *c, uint32_t a, uint16_t v) {
     a &= ADDR_MASK;
+    if (c->wwatch_addr && a == c->wwatch_addr && !c->wwatch_hit) {
+        c->wwatch_pc = (((uint32_t)(c->r[SR] & 0x3f)) << 16) | c->r[PC]; c->wwatch_val = v; c->wwatch_hit = 1;
+    }
     if (a >= MMIO_LO && a <= MMIO_HI) {
         uint32_t o = a - MMIO_LO;
         c->mmio_writes[o]++; c->mmio_last[o] = v; c->mmio_has[o] = 1;
