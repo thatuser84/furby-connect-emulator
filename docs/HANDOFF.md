@@ -956,3 +956,23 @@ Two corrections from chasing the pixels:
 
 **Next:** find the per-frame executor that consumes `[0x53fe]`/`[0x53fc]` (the wake-script
 interpreter) and capture *its* output to the eye-LCD — that's the true eye pixel path.
+
+## §33 — The wake animation IS live; its render output is the gap
+
+Confirmed the wake animation genuinely runs under the forced-wake gates:
+- `[0x53fe]/[0x53ff]` = `0x09:0xc4ce` (the wake pointer, set correctly by the state-3 loader)
+- `[0x53fc]` (frame index) **advances each frame** (observed 0→2) — it's animating
+- executor **`0x08cfe4`** reads `[0x53fc]`/`[0x53fd]`, and per frame indexes a **6-word-per-
+  frame table** at `0x9c4ce` (via `0x091efb`, frame×6 → 3 far-pointers/frame) and dispatches.
+
+So the animation engine is executing. The remaining gap is purely its **visible render**:
+bank-0 palette / sprite output stays empty, so no eye pixels materialize. The per-frame
+routines' graphics output isn't being produced/captured in the emulator yet.
+
+Also nailed down: state 5 waits on PPU flag `0x7072` (display-DMA done); faking it clear
+pushes the CPU into banked code at `0x330000` (needs the real PPU display-DMA emulated).
+And the state-4 palette is the **debug font**, not the eye.
+
+**Next:** decode executor `0x08cfe4`'s per-frame dispatch (the 3 far-pointers/frame) to see
+where each frame's pixels are written, and emulate the PPU display-DMA (0x7072) so the
+rendered frame reaches the eye output.
