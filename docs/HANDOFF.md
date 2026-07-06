@@ -1160,3 +1160,15 @@ This is the milestone the whole project aimed at: the discontinued Furby Connect
 firmware, emulated from scratch, **driving its own eye graphics to a rendered frame.**
 Repro: `tools/render_live_eye.py`. Remaining polish: palette-bank match for true colour, and
 wiring the loader HLE into default_furby_cpu so it's on by default.
+
+## §41.1 — True-colour eye confirmed (palette bank 64)
+
+The green/noisy first render was just a wrong palette bank in the quick script. Rendering
+the firmware-selected frame (playlist 8, frame 0 = cels **5,6,7,8** — the exact tiles the
+live PPU referenced in §41) through the authoritative decoder with the verified **BASE
+palette bank 64** yields a pixel-perfect Furby eye: purple→magenta iris, glossy dark pupil,
+pink lower glow, two white catchlights, iris sparkles. `docs/images/furby_eye_LIVE.png`.
+
+Both halves now agree: the running firmware composes the eye (correct tiles, 63-colour
+palette, no crash), and those tiles decode to the real eye. The `10f2` per-quarter field is
+flags, not a raw pal offset; BASE uses bank 64. Repro: `tools/render_live_eye.py`.
