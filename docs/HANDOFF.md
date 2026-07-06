@@ -866,3 +866,29 @@ firmware sits in an idle one, waiting for a real-world input to transition.
 
 That state machine (mood engine + XLS action tree + sequence player) is the sole
 remaining frontier. Everything beneath it is verified correct and fixed.
+
+## §29 — BREAKTHROUGH: the behavior state machine is mapped
+
+Found and mapped the personality engine's core dispatcher — the exact mechanism that
+gates every animation:
+
+- **Dispatcher `0x06158b`**, gated by `[0x4370]==1` (open), switches on state var **`[0x4e8c]`**:
+  - `0` → `0x0616fe` **idle** (where the firmware sits — confirmed via live stack walk)
+  - `1` → advance to state 2
+  - `2` → `0x07f680`; checks wake reason `[0x534f]` (currently `0xff` = "no trigger, don't advance")
+  - `3` → `0x061608`: calls `0x061855` then **`0x083ec4(8)`** — sets animation selector
+    **`[0x5a58]=8`** (playlist 8 = the eyes) and calls the play chain `0x07060d`→`0x0709f1`
+  - `4`,`5` → further states
+- **`[0x5a58]` = the animation selector; `[0x534f]` = the wake reason.**
+
+Proven controllable: a synthetic in-context call to `0x083ec4(8)` set `[0x5a58]=8` and drove
+**710 writes to the eye-LCD GPIO lines** (0x7869/0x7050) — the eye driver got exercised for
+the first time. (Out-of-context it can't hold state, so no clean frame yet.)
+
+**Why the eyes stay dark, now exact:** the firmware sits in state 0; advancing 0→…→3
+needs a **wake trigger** that sets `[0x534f]` to a real reason (not `0xff`) and lets state 0's
+event loop return so the dispatcher re-runs. That single transition is the whole ballgame.
+
+**Next (precise, small):** find state 0's loop-exit / `[0x534f]` producer — the sensor/wake
+input the firmware reads — and supply it. Then the machine marches 0→3 on its own and plays
+playlist 8 through the real driver. This is no longer a search; it's one identified gate.
