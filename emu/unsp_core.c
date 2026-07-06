@@ -78,6 +78,7 @@ typedef struct {
     uint16_t dma_params[8][4];
     uint16_t dma_status;
     uint64_t dma_runs;          /* telemetry */
+    uint64_t ppu_dma_runs;
     /* banked external (CS) window: 0x200000-0x3fffff -> NAND via 0x7810 */
     uint32_t cs_base;           /* word offset into NAND where cs-space starts */
     uint16_t *csram;            /* CS/SDRAM backing (writable), MAME csbase=0x20000 */
@@ -381,6 +382,19 @@ static inline void write16(Cpu *c, uint32_t a, uint16_t v) {
             uint32_t off = a - 0x7400;
             if (c->mmio_last[0x707e - MMIO_LO] & 1) off += 0x400;
             c->spriteram[off] = v;
+        }
+        /* PPU sprite/display DMA: writing 0x7072 (length = count*4-1) kicks a block
+         * copy from [0x7070] (source) to [0x7071] (dest, e.g. sprite RAM 0x7400) and
+         * then reads back 0 (done). The firmware polls 0x7072 for completion. */
+        if (a == 0x7072 && v != 0) {
+            uint32_t src = c->mmio_last[0x7070 - MMIO_LO];
+            uint32_t dst = c->mmio_last[0x7071 - MMIO_LO];
+            uint32_t len = (uint32_t)v + 1;
+            for (uint32_t i = 0; i < len; i++)
+                write16(c, (dst + i) & ADDR_MASK, read16(c, (src + i) & ADDR_MASK));
+            c->mmio_last[o] = 0;                 /* transfer complete */
+            c->ppu_dma_runs++;
+            return;
         }
         /* snapshot the whole PPU state at each PPU-enable write (0x707f) — captures
          * the render moment before the firmware clears the table for the next frame */

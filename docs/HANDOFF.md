@@ -976,3 +976,20 @@ And the state-4 palette is the **debug font**, not the eye.
 **Next:** decode executor `0x08cfe4`'s per-frame dispatch (the 3 far-pointers/frame) to see
 where each frame's pixels are written, and emulate the PPU display-DMA (0x7072) so the
 rendered frame reaches the eye output.
+
+## §34 — PPU display-DMA emulated; the forced path is a dev/debug display
+
+Emulated the PPU sprite/display DMA: writing `0x7072` (length) now copies `[0x7070]`→
+`[0x7071]` (sprite RAM 0x7400) and reads back 0, so state 5's wait passes and sprite RAM
+populates (64 words). But the picture is now clear: this forced-wake path drives a
+**dev/debug display** — debug font (`DebugFont_Pal.bin`) + PPU text sprites (source 0x2912
+holds tile IDs 1,2,3,4… = characters) — not the retail eye. The GPL16258 PPU is a
+dev/tilemap feature; the **retail Furby eye is the round eye-LCD driven over SPI** by the
+wake animation code-script (§33), which runs (frame index advances) but hasn't been made
+to clock pixel data out yet. After the PPU DMA the CPU also jumps to banked code at
+`0x330000` (banked-window code fetch needs correct NAND mapping).
+
+**State of the eye-pixels quest:** every subsystem is mapped and running (state machine,
+wake sequence, eye-LCD handshake, PPU DMA, animation executor). The retail eye pixels
+require the wake script's per-frame render to emit its framebuffer to the eye-LCD over
+SPI — that render path is the focused remaining target.
