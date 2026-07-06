@@ -83,6 +83,7 @@ typedef struct {
     /* banked external (CS) window: 0x200000-0x3fffff -> NAND via 0x7810 */
     uint32_t cs_base;           /* word offset into NAND where cs-space starts */
     uint16_t *csram;            /* CS/SDRAM backing (writable), MAME csbase=0x20000 */
+    uint8_t  *csram_written;    /* per-word: 1 = written (SDRAM), 0 = untouched (reads NAND) */
     uint32_t csram_words;
     uint64_t cs_reads;
     /* debug PC watchpoints: count executions of up to 32 machine addresses */
@@ -115,16 +116,17 @@ typedef struct {
 Cpu *cpu_new(void) {
     Cpu *c = (Cpu *)calloc(1, sizeof(Cpu));
     c->mem = (uint16_t *)calloc(MEMW, sizeof(uint16_t));
-    /* csram (CS/SDRAM window) is allocated but DISABLED by default: this firmware
-       reads its graphics from NAND through the 0x7810 bank, not SDRAM. Enabling the
-       intercept (set_csram_words>0) routes those reads to zeroed SDRAM and blanks the
-       display. Kept allocatable for experiments / other titles. */
-    c->csram_words = 0u;
-    c->csram = (uint16_t *)calloc(0x1000000u, sizeof(uint16_t));
+    /* CS/SDRAM window: 16 M-words, write-tracked. A banked word that gets written
+       behaves as SDRAM (reads return the stored value); an untouched word reads through
+       to NAND (ROM). This models the boot-ROM's SDRAM bring-up without needing the exact
+       CS-size boundary, and fixes file-loaded buffers (which live in banked SDRAM). */
+    c->csram_words = 0x1000000u;
+    c->csram = (uint16_t *)calloc(c->csram_words, sizeof(uint16_t));
+    c->csram_written = (uint8_t *)calloc(c->csram_words, 1);
     c->cs_base = 0u;
     return c;
 }
-void cpu_free(Cpu *c) { if (c) { free(c->mem); free(c->csram); free(c); } }
+void cpu_free(Cpu *c) { if (c) { free(c->mem); free(c->csram); free(c->csram_written); free(c); } }
 
 void cpu_reset(Cpu *c, uint32_t entry, uint32_t cs) {
     memset(c->r, 0, sizeof(c->r));
@@ -360,8 +362,13 @@ static inline uint16_t read16(Cpu *c, uint32_t a) {
         int32_t realoffset = (int32_t)((a - 0x200000) + bank * 0x200000u) - (int32_t)c->cs_base;
         c->cs_reads++;
         if (realoffset < 0) return 0;
-        if ((uint32_t)realoffset < c->csram_words) return c->csram[realoffset];   /* SDRAM (cs0/cs1) */
-        uint32_t b = ((uint32_t)realoffset - c->csram_words) * 2;                  /* NAND (cs2) */
+        /* SDRAM-vs-ROM by write-tracking: a banked word that was ever written behaves
+         * as writable SDRAM (return the stored value); an untouched word reads through
+         * to NAND (ROM). This auto-splits cs0/cs1 (SDRAM) from cs2 (NAND) without needing
+         * the exact CS-size boundary the boot ROM would program. */
+        if ((uint32_t)realoffset < c->csram_words && c->csram_written[realoffset])
+            return c->csram[realoffset];
+        uint32_t b = ((uint32_t)realoffset) * 2;                                  /* NAND (ROM) */
         if (c->nand && b + 1 < c->nand_size) return (uint16_t)(c->nand[b] | (c->nand[b + 1] << 8));
         return 0;
     }
@@ -428,8 +435,11 @@ static inline void write16(Cpu *c, uint32_t a, uint16_t v) {
     if (a >= 0x200000 && a <= 0x3fffff) {
         uint32_t bank = c->mmio_last[0x7810 - MMIO_LO] & 0x3f;
         int32_t realoffset = (int32_t)((a - 0x200000) + bank * 0x200000u) - (int32_t)c->cs_base;
-        if (realoffset >= 0 && (uint32_t)realoffset < c->csram_words) c->csram[realoffset] = v;  /* SDRAM */
-        return;   /* NAND region is read-only */
+        if (realoffset >= 0 && (uint32_t)realoffset < c->csram_words) {
+            c->csram[realoffset] = v;                 /* SDRAM: persist the write ... */
+            c->csram_written[realoffset] = 1;         /* ... and mark it SDRAM (reads return it) */
+        }
+        return;                                       /* untouched words stay ROM (read NAND) */
     }
     if (c->wr_hist) c->wr_hist[(a >> 10) & 0x3fff]++;   /* RAM-write histogram (per 1K words) */
     c->mem[a] = v;

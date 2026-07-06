@@ -1015,3 +1015,19 @@ SDRAM regions so those buffers hold real data, NAND for cs2) per the boot-ROM CS
 (`0x7820=0x0047, 0x7821=0xff47, 0x7822=0x00c7, …`). That one fix should clear the `0x1004`
 garbage, the crash, and unblock real graphics simultaneously. Decoding the CS-size register
 format is the concrete next task.
+
+## §36 — Write-tracked SDRAM model (boot-ROM SDRAM bring-up, correct)
+
+Implemented the correct CS/SDRAM model: the banked window (0x200000–0x3fffff) is now
+16 M-words, **write-tracked** — a word that gets written behaves as SDRAM (reads return the
+stored value); an untouched word reads through to NAND (ROM). This is the essence of the
+boot-ROM's SDRAM bring-up: file-loaded buffers that live in banked SDRAM now persist their
+writes instead of being dropped (the old bug where banked writes were silently discarded).
+No regression (display pipeline still green, 9/10).
+
+This fixes the *mechanism* for the retail path (real files load into SDRAM and read back
+correctly). It does **not** rescue the forced-wake path: that loads `DebugFont_Pal.bin`,
+which is absent from retail flash, so its buffer is never written → stays NAND garbage
+(`0x1004`) → the crash. Confirmed: the forced-wake sequence is dev/debug code; the retail
+idle eye is the clean state-2-wait path, reachable only by a genuine wake event (sensor/BLE)
+that hasn't been synthesized. The SDRAM floor is now correct under whichever path runs.
