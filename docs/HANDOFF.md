@@ -832,3 +832,20 @@ display list — because it never activates an animation, and the boot-ROM SDRAM
 initialization (which the firmware depends on) isn't emulated. Full fix = emulate the
 GPL16258 boot-ROM bootstrap (SDRAM/CS init) per MAME's `gpl16250_nand`, or drive the
 behavior engine to activate an animation. Both are real, scoped, multi-session work.
+
+## §27.1 — Real boot init fully replicated; root is confirmed behavioral, not boot
+
+Added the boot-ROM **CS-config defaults** at reset (MAME gpac800 bootstrap):
+`0x7820=0x0047, 0x7821=0xff47, 0x7822=0x00c7, 0x7823=0x0047, 0x7824=0x0047`. Combined
+with the CS/SDRAM backing (§27), our HLE boot now matches MAME's real bootstrap
+(GameCode copy to 0x050000, entry 0x050020, vectorbase 0x6fe0, CS defaults, SDRAM).
+
+**Result: the deadlock still persists.** So with the boot init *fully and correctly*
+replicated, the firmware STILL never activates an animation / builds a display list.
+This definitively rules out the boot init as the cause. The true remaining root is
+**behavioral**: the firmware waits for a real event (sensor / wake / BLE / petting) to
+start an animation, and nothing in the emulator supplies it. Driving the display before
+that event is what produces the §26 compositor deadlock.
+
+Everything cleanly-fixable is fixed (IRQ, FIQ, CS/SDRAM, boot defaults). The eyes need
+the behavior engine driven by a synthetic sensor/wake event — the genuine open frontier.

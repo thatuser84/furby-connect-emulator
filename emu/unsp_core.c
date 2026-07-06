@@ -124,6 +124,13 @@ void cpu_reset(Cpu *c, uint32_t entry, uint32_t cs) {
     c->bnk = 0; c->divq_bit = 0xffffffffu;
     c->irq_vecbase = 0x6ff0;    /* IRQ0-7 trampoline table in SRAM (line n -> +2n) */
     c->fiq_vec = 0x6fec; c->fiq_pending = 0; c->in_fiq = 0;
+    /* boot-ROM CS-config defaults (MAME gpac800 bootstrap) — the internal ROM
+       writes these before running GameCode; our HLE boot must replicate them */
+    c->mmio_last[0x7820 - MMIO_LO] = 0x0047; c->mmio_has[0x7820 - MMIO_LO] = 1;
+    c->mmio_last[0x7821 - MMIO_LO] = 0xff47; c->mmio_has[0x7821 - MMIO_LO] = 1;
+    c->mmio_last[0x7822 - MMIO_LO] = 0x00c7; c->mmio_has[0x7822 - MMIO_LO] = 1;
+    c->mmio_last[0x7823 - MMIO_LO] = 0x0047; c->mmio_has[0x7823 - MMIO_LO] = 1;
+    c->mmio_last[0x7824 - MMIO_LO] = 0x0047; c->mmio_has[0x7824 - MMIO_LO] = 1;
     c->r[PC] = entry & 0xffff;
     c->r[SR] = (uint16_t)((c->r[SR] & 0xffc0) | (cs & 0x3f));
 }
