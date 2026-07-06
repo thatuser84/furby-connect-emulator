@@ -916,3 +916,24 @@ from the wrong CS/NAND offset (the §27/§26.1 banked-window mapping), so the pi
 noise, not the eye. **Final piece:** fix the graphics CS/NAND read offset so the real
 CEL/PAL data loads — then the same live pipeline draws the actual eye. Everything upstream
 (state machine, wake, eye-LCD handshake, SPI) is now proven working.
+
+## §31 — The wake animation is a code-script (not a frame list)
+
+Traced the wake animation from state 3's loader `0x08cfa7`: it stores the animation pointer
+`0x09:0xc4ce` into `[0x53fe]` (a *separate* animation system from `[0x5a58]` — that `0x1004`
+was a red herring). Crucially, **`0x9c4ce` is inside GameCode** (0x050000–0x0bd000), so the
+wake/boot animation is **built into the firmware**, not a NAND personality file.
+
+Its data at `0x9c4ce` is a **table of far pointers** (`0x08:0xcf9b, 0x08:0xcf9f, 0x06:0x…`)
+and each target is **code** (`push bp` prologue) — i.e. the wake animation is a **scripted
+sequence of ~30+ GameCode routines**, each driving one animation step, not a simple
+`[cel,pal]` frame list. Rendering it = executing those routines, which the firmware does
+when it plays the animation.
+
+**Consequence for the "real pixels" goal:** two separate graphics paths exist —
+(a) the **built-in wake script** (code-driven, in GameCode), and (b) the **NAND personality
+animations** (the CEL/PAL/SPR playlist-8 format `emu/furby_display.py` already decodes).
+The live pipeline (§30) currently runs path (a). Getting clean eye pixels means either
+faithfully executing the wake script's routines, or steering the firmware to load a NAND
+playlist through path (b). Both are multi-session RE. The live wake pipeline itself is done
+and proven; this is the remaining content campaign, now precisely scoped.
