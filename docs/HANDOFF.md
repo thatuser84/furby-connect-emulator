@@ -1050,3 +1050,24 @@ Traced the `0x330000` crash to its true mechanism with a write-watchpoint:
 This is a memory-corruption on the dev boot-display path (state 4/5). It does not affect the
 clean retail idle-eye path (state-2 wait). Added `cpu_wwatch_*` (RAM write-watchpoint) for
 this class of hunt.
+
+## §38 — DEFINITIVE ROOT: SDRAM graphics buffers are never loaded (skipped boot-ROM resource load)
+
+Traced the ubiquitous `0x1004` to the floor. The render (loop `0x0791cd`) reads its graphics
+from **SDRAM buffer `0x83:0x2000` (0x832000)** — proven with a write-watchpoint to be
+**NEVER written** during the whole wake. The banked read therefore falls through to NAND, and
+the entire bank-4 NAND vicinity is nothing but the repeating `0441/4110/1004` pattern —
+**empty/erased flash**, not graphics (checked both cs_base=0 and MAME's 0x20000; no
+high-entropy region anywhere near). So the render reads blank pattern → `0x1004` → garbage
+index/count/handler → overflow → the `0x330000` crash.
+
+**Unified root of the entire eye-rendering problem:** the boot ROM loads graphics resources
+from the FAT files into SDRAM at startup; our HLE boot (jump straight into GameCode) skips
+that, so every SDRAM graphics buffer the render reads is empty. The `0x1004` that has caused
+the §26 deadlock, the bad palette, the bad counts, and the crash is simply **"reading
+unloaded SDRAM."** One cause, every symptom.
+
+**The fix (bounded, real):** replicate the boot-ROM's file→SDRAM resource load — determine
+which personality/graphics files load to which banked SDRAM addresses (0x82f7f0, 0x832000, …)
+and pre-load them in `default_furby_cpu`, so the render reads real CEL/PAL data. Everything
+downstream (deadlock, crash, palette, the eye itself) is gated on that single load step.
