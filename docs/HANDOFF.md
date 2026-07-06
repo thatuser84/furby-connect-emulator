@@ -993,3 +993,25 @@ to clock pixel data out yet. After the PPU DMA the CPU also jumps to banked code
 wake sequence, eye-LCD handshake, PPU DMA, animation executor). The retail eye pixels
 require the wake script's per-frame render to emit its framebuffer to the eye-LCD over
 SPI — that render path is the focused remaining target.
+
+## §35 — Unified root: the `0x1004` garbage = under-initialized SDRAM/CS
+
+The `0x330000` crash is a garbage-execution cascade: the CPU ends up doing `goto mr` with
+**r3 = 0x1004**, jumping to 0x001004, then executing the GameCode header (0x050005) as code.
+And `0x1004` is the *same* value that has been the bad palette colour, the bad display-list
+child-count, and the bad animation id all along — **one garbage source propagating
+everywhere.** It originates from reads of **under-initialized SDRAM/CS buffers** (e.g. the
+palette source at the hardcoded far-pointer `0x0082:0xf7f0` = bank-4 SDRAM `0x22f7f0`), which
+nothing fills in the emulator because the boot-ROM SDRAM/CS bring-up isn't fully modeled and
+the firmware doesn't write there itself.
+
+Also confirmed the state machine is *correct*: `[0x534f]=0` → state 2 **waits** (timing loop
+`0x061823`) for a real wake; my forcing pushes it into the boot-display sequence that reads
+those uninitialized buffers → `0x1004` → crash. So the retail idle eye is *downstream* of a
+clean boot-display that needs the SDRAM/CS backed.
+
+**The single highest-leverage fix:** correctly model the CS/SDRAM window (back the cs0/cs1
+SDRAM regions so those buffers hold real data, NAND for cs2) per the boot-ROM CS config
+(`0x7820=0x0047, 0x7821=0xff47, 0x7822=0x00c7, …`). That one fix should clear the `0x1004`
+garbage, the crash, and unblock real graphics simultaneously. Decoding the CS-size register
+format is the concrete next task.
