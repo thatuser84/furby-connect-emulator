@@ -789,3 +789,24 @@ the firmware has built a display list. `run.py --diag` now detects it (main-loop
 trigger, and whether a subsystem the firmware waits on (audio DSP / motor / a "graphics
 ready" handshake) isn't satisfied in the emulator, gating the build. Fix that and the
 compositor gets a valid list → terminates → the pipeline renders.
+
+### §26.1 — Likely culprit: the 0x7810 banked-window NAND mapping
+
+The compositor reads display-list/graphics nodes from the **CS banked window**
+(0x200000–0x3fffff → NAND, `read16`), selected by `0x7810 & 0x3f`. Two red flags:
+
+- **`cs_base` is never set** (stays 0). It's documented as "word offset into NAND where
+  cs-space starts", and `cpu_set_cs_base` has no caller — so if the graphics/CS region
+  doesn't start at NAND offset 0, every banked read is shifted wrong.
+- the offset formula `(a-0x200000) + bank*0x200000 - 0x20000 + cs_base` overruns the
+  114 MB NAND for larger banks (bank·2 Mword ⇒ up to 252 MB), and the compositor was
+  using banks that land it on garbage (child-count 0x1004, bank-ptr 0x3071).
+
+**Hypothesis:** the banked-window mapping is misconfigured, so the compositor reads the
+wrong NAND bytes and interprets graphics data as a display-list tree → the §26 deadlock.
+**Fix direction:** derive the correct `cs_base`/formula by tracing a *known* banked read
+(e.g. the firmware fetching a known CEL/SPR asset) and matching it to that asset's real
+NAND offset; then the compositor should read a valid list and terminate.
+
+(Also latent, not yet triggered: writes to 0x200000–0x3fffff go to flat `c->mem` while
+reads route to NAND — a read/write asymmetry to fix if the firmware ever uses SDRAM there.)
