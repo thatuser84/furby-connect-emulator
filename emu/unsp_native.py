@@ -296,6 +296,12 @@ def default_furby_cpu(image_bytes, nand_bytes=None):
         cpu.add_hle(0x078730, 2)   # find-file-by-name -> size
         cpu.add_hle(0x090f7f, 4)   # open(name,mode) -> handle (resolve via FAT)
         cpu.add_hle(0x091c93, 5)   # read-byte(handle) -> next file byte
+        # LOADER HLE (§41): resolve a file and blit it to its dest CS/SDRAM buffer.
+        # This is the game-driven NAND->SDRAM resource load the HLE boot otherwise
+        # skips; without it the render reads empty SDRAM (0x1004 garbage) -> the eye
+        # never draws and the pipeline crashes. With it, BASE.PAL->0x22def0,
+        # BASE.SPR->0x3b7610 etc. populate and the firmware composes its own eye.
+        cpu.add_hle(0x0785de, 7)   # load_file(name, dest) -> blit to SDRAM
         # display sync: the eye-LCD pipeline waits on 0x707c bit15 (vblank/ready)
         # and reads 0x707f status bit7; model them so the compositor advances.
         cpu.set_reador(0x707c, 0x8000)

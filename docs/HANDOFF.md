@@ -1194,3 +1194,18 @@ decisive match. Bank 8 = the real generic Furby Connect eye: deep black pupil wi
 purple-blue starfield rim, cyan glow pooling at the bottom, white catchlights. Same
 firmware-selected tiles (playlist 8 frame 0, cels 5,6,7,8); correct palette bank 8.
 `docs/images/furby_eye_LIVE.png` + `tools/render_live_eye.py` finalised to bank 8.
+
+## §42 — Polish complete: loader HLE default-on, live firmware palette, full animation
+
+1. **Loader HLE baked into `default_furby_cpu`** (id=7 on 0x0785de) — the emulator now
+   loads graphics into SDRAM by default; no external hook needed. Verified: fires
+   automatically, no crash, PPU tiles 5,6,7,8, 60-colour palette.
+2. **True colour from the firmware's own state** — render now uses the LIVE PPU palette the
+   firmware loads into 0x7300 (it loads bank 8 itself), not a preset. Both tiles AND colour
+   now come from the running firmware. Identical dark-navy galaxy eye.
+3. **Full 14-frame blink animation** — playlist 8 = cels 5,9,13,…,57 (14 frames); exported
+   `docs/images/furby_eye_anim.gif` with the firmware's live palette. `tools/render_live_eye.py`
+   rewritten to drive the live firmware and export both PNG + GIF.
+
+The Furby Connect emulator is feature-complete for the eye: real firmware boots, wakes,
+selects and composes its own eye animation through its PPU, rendered in true colour, animated.
