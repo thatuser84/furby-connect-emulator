@@ -937,3 +937,22 @@ The live pipeline (§30) currently runs path (a). Getting clean eye pixels means
 faithfully executing the wake script's routines, or steering the firmware to load a NAND
 playlist through path (b). Both are multi-session RE. The live wake pipeline itself is done
 and proven; this is the remaining content campaign, now precisely scoped.
+
+## §32 — csram was a mis-model; the wake palette was a DEBUG FONT
+
+Two corrections from chasing the pixels:
+
+1. **The §27 csram/SDRAM window was a mis-model for this firmware.** The original edit had
+   silently failed (anchor mismatch) so csram was never active — and that turned out to be
+   *correct*: the Furby reads its graphics from **NAND through the 0x7810 bank**, not SDRAM.
+   Actually enabling csram routed those reads to zeroed SDRAM and blanked the display
+   (diagnostic regressed 9→8). csram is now allocated but **disabled by default**
+   (`csram_words=0`, `cs_base=0`); `set_csram_words()` kept for experiments.
+2. **The palette I was chasing in the forced-wake path is a debug font**, not the eyes:
+   the loader `0x07ea98` reads the path string `A:\Graphics\DebugFont_Pal.bin` (at GameCode
+   `0x9b8ad`) and loads it via `0x0785de`. So state 4's palette activity is a debug/overlay
+   artifact. The real eye frames come from state 3's **wake animation code-script**
+   (`[0x53fe]` pointer → the GameCode routine table at `0x9c4ce`), executed per-frame.
+
+**Next:** find the per-frame executor that consumes `[0x53fe]`/`[0x53fc]` (the wake-script
+interpreter) and capture *its* output to the eye-LCD — that's the true eye pixel path.

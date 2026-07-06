@@ -113,9 +113,16 @@ typedef struct {
 Cpu *cpu_new(void) {
     Cpu *c = (Cpu *)calloc(1, sizeof(Cpu));
     c->mem = (uint16_t *)calloc(MEMW, sizeof(uint16_t));
+    /* csram (CS/SDRAM window) is allocated but DISABLED by default: this firmware
+       reads its graphics from NAND through the 0x7810 bank, not SDRAM. Enabling the
+       intercept (set_csram_words>0) routes those reads to zeroed SDRAM and blanks the
+       display. Kept allocatable for experiments / other titles. */
+    c->csram_words = 0u;
+    c->csram = (uint16_t *)calloc(0x1000000u, sizeof(uint16_t));
+    c->cs_base = 0u;
     return c;
 }
-void cpu_free(Cpu *c) { if (c) { free(c->mem); free(c); } }
+void cpu_free(Cpu *c) { if (c) { free(c->mem); free(c->csram); free(c); } }
 
 void cpu_reset(Cpu *c, uint32_t entry, uint32_t cs) {
     memset(c->r, 0, sizeof(c->r));

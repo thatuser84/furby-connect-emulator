@@ -55,6 +55,9 @@ _sigs = {
     "cpu_set_ready": (None, [_p, _u32, _u16]),
     "cpu_set_autoclear": (None, [_p, _u32, _u16]),
     "cpu_set_csram_words": (None, [_p, _u32]),
+    "cpu_dlog_n": (_u32, [_p]),
+    "cpu_dlog_get": (_u32, [_p, _u32, _u32]),
+    "cpu_dma_runs": (_u64, [_p]),
     "cpu_set_reador": (None, [_p, _u32, _u16]),
     "cpu_set_readclear": (None, [_p, _u32, _u16]),
     "cpu_mmio_reads": (_u32, [_p, _u32]),
@@ -177,6 +180,9 @@ class NativeCPU:
     def set_ready(self, a, v):      _lib.cpu_set_ready(self.c, a, v & 0xffff)
     def set_autoclear(self, a, m):  _lib.cpu_set_autoclear(self.c, a, m & 0xffff)
     def set_csram_words(self, n): _lib.cpu_set_csram_words(self.c, n)
+    def dlog_n(self): return _lib.cpu_dlog_n(self.c)
+    def dlog_get(self, i): return [_lib.cpu_dlog_get(self.c, i, k) for k in range(5)]
+    def dma_runs(self): return _lib.cpu_dma_runs(self.c)
     def set_reador(self, a, m):     _lib.cpu_set_reador(self.c, a, m & 0xffff)
     def set_readclear(self, a, m):  _lib.cpu_set_readclear(self.c, a, m & 0xffff)
     def mmio_reads(self, a):        return _lib.cpu_mmio_reads(self.c, a)
