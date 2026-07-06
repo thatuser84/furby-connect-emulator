@@ -1172,3 +1172,15 @@ pink lower glow, two white catchlights, iris sparkles. `docs/images/furby_eye_LI
 Both halves now agree: the running firmware composes the eye (correct tiles, 63-colour
 palette, no crash), and those tiles decode to the real eye. The `10f2` per-quarter field is
 flags, not a raw pal offset; BASE uses bank 64. Repro: `tools/render_live_eye.py`.
+
+## §41.2 — Correct colour: the BLUE generic eye (palette bank 12)
+
+DJ confirmed the retail generic eye is BLUE, not the magenta of bank 64. Scanned all 43
+banks of Base.PAL by blue-vs-red dominance: **bank 12 (offset 768)** is the blue eye — the
+canonical generic Furby Connect eye (blue iris, glossy pupil, catchlights, sparkles), matching
+the reference image from the start of the project. Same firmware-selected tiles (playlist 8,
+frame 0 = cels 5,6,7,8); only the palette bank differed. `docs/images/furby_eye_LIVE.png`
+updated to the blue render; `tools/render_live_eye.py` uses bank 12.
+(Note: the eye's active palette bank is chosen at runtime by the firmware's personality state;
+bank 12 = the default generic/BASE look. Wiring the emulator to read the firmware's live bank
+selection — rather than presetting it — is the remaining colour-accuracy polish.)

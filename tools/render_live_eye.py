@@ -12,8 +12,8 @@ print("total palette colors available:", len(colors))
 for boff in (64, 4338%len(colors) if colors else 64):
     pass
 # use the preset: bank 64
-bank=FD.palette_bank(colors, 64)
-FD.write_png("/tmp/furby_eye_TRUTH2.png", idx, bank, scale=4)
+bank=FD.palette_bank(colors, 768)  # bank 12 = the blue generic eye
+FD.write_png("docs/images/furby_eye_LIVE.png", idx, bank, scale=4)
 nz=len([c for c in bank if c!=(0,0,0)])
 print("bank 64: %d non-black colors; sample %s"%(nz,bank[:6]))
 print("wrote /tmp/furby_eye_TRUTH2.png")
