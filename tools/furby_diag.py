@@ -98,6 +98,16 @@ def build_checks(d, args):
         return ok, (f"raise_irq(5) vectored to frame handler 0x08f23f" if ok
                     else f"raise_irq(5) landed at 0x{lpc:06x} (expected 0x08f23f) — irq_vecbase bug")
 
+    def c_fiq():
+        cpu = state["cpu"]
+        if not hasattr(cpu, "raise_fiq"):
+            return False, "core has no FIQ dispatch (raise_fiq missing)"
+        cpu.raise_fiq(); cpu.run(2)
+        lpc = cpu.lpc()
+        ok = 0x08f1d0 <= lpc <= 0x08f200
+        return ok, (f"raise_fiq() vectored into the FIQ handler (0x{lpc:06x})" if ok
+                    else f"FIQ raised but landed at 0x{lpc:06x} (firmware may not have enabled fiq yet)")
+
     def c_display():
         cpu = state["cpu"]
         before = sum(1 for i in range(256) if cpu.snap_pal(i))
@@ -142,6 +152,7 @@ def build_checks(d, args):
         ("firmware boot", c_boot),
         ("FAT filesystem (HLE)", c_fs),
         ("IRQ dispatch", c_irq),
+        ("FIQ dispatch", c_fiq),
         ("display pipeline", c_display),
         ("eye decoder", c_eyes),
         ("ROM container", c_rom),

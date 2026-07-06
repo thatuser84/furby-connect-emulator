@@ -85,6 +85,8 @@ _sigs = {
     "cpu_set_timer": (None, [_p, ctypes.c_int, _u64]),
     "cpu_set_timer_status": (None, [_p, _u32, _u16]),
     "cpu_raise_irq": (None, [_p, ctypes.c_int]),
+    "cpu_raise_fiq": (None, [_p]),
+    "cpu_set_fiq_vec": (None, [_p, _u32]),
     "cpu_irq_taken": (_u64, [_p]),
     "cpu_trapped": (ctypes.c_int, [_p]),
     "cpu_trap_from": (_u32, [_p]),
@@ -194,6 +196,8 @@ class NativeCPU:
     def set_timer(self, line, period):  _lib.cpu_set_timer(self.c, line, period)
     def set_timer_status(self, a, bits): _lib.cpu_set_timer_status(self.c, a, bits)
     def raise_irq(self, line):          _lib.cpu_raise_irq(self.c, line)
+    def raise_fiq(self):                _lib.cpu_raise_fiq(self.c)
+    def set_fiq_vec(self, v):           _lib.cpu_set_fiq_vec(self.c, v)
 
     # Registers: enum { SP, R1, R2, R3, R4, BP, SR, PC }
     _SP, _SR, _PC = 0, 6, 7

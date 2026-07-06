@@ -49,6 +49,8 @@ typedef struct {
     /* interrupts */
     uint8_t irq_pending;        /* bitmask of pending IRQ lines 0-7 */
     int in_irq;                 /* currently servicing an IRQ (no nesting) */
+    int fiq_pending, in_fiq;    /* fast interrupt (higher priority than IRQ) */
+    uint32_t fiq_vec;           /* FIQ trampoline vector (0x6fec on this firmware) */
     uint16_t secbank[4];        /* shadow R1-R4 for secbank (fast-interrupt bank) */
     int bnk;                    /* secbank active flag */
     uint32_t divq_bit, divq_dividend, divq_divisor, divq_a;  /* iterative DIVQ state */
@@ -119,6 +121,7 @@ void cpu_reset(Cpu *c, uint32_t entry, uint32_t cs) {
     c->trapped = 0; c->trap_from = c->trap_to = 0;
     c->bnk = 0; c->divq_bit = 0xffffffffu;
     c->irq_vecbase = 0x6ff0;    /* IRQ0-7 trampoline table in SRAM (line n -> +2n) */
+    c->fiq_vec = 0x6fec; c->fiq_pending = 0; c->in_fiq = 0;
     c->r[PC] = entry & 0xffff;
     c->r[SR] = (uint16_t)((c->r[SR] & 0xffc0) | (cs & 0x3f));
 }
@@ -258,6 +261,8 @@ void cpu_set_timer_status(Cpu *c, uint32_t addr, uint16_t bits) {
     if (addr >= MMIO_LO && addr <= MMIO_HI) { c->timer_status_off = addr - MMIO_LO; c->timer_status_bits = bits; }
 }
 void cpu_raise_irq(Cpu *c, int line) { c->irq_pending |= (uint8_t)(1u << (line & 7)); }
+void cpu_raise_fiq(Cpu *c) { c->fiq_pending = 1; }
+void cpu_set_fiq_vec(Cpu *c, uint32_t v) { c->fiq_vec = v; }
 uint64_t cpu_irq_taken(Cpu *c) { return c->irq_taken; }
 int cpu_trapped(Cpu *c) { return c->trapped; }
 uint32_t cpu_trap_from(Cpu *c) { return c->trap_from; }
@@ -481,7 +486,7 @@ static void exec_remaining(Cpu *c, uint16_t op) {
         return;
     }
     if (lower == 0x29) {                 /* pop / reti / retf */
-        if (op == 0x9a98) { c->r[SR] = pop(c, SP); c->r[PC] = pop(c, SP); c->in_irq = 0; return; }  /* reti */
+        if (op == 0x9a98) { c->r[SR] = pop(c, SP); c->r[PC] = pop(c, SP); c->in_irq = 0; c->in_fiq = 0; return; }  /* reti */
         if (op == 0x9a90) { c->r[SR] = pop(c, SP); c->r[PC] = pop(c, SP); return; }                 /* retf */
         int r0 = opn, r1 = opa;
         while (r0) { r1++; c->r[r1] = pop(c, opb); r0--; }
@@ -1052,8 +1057,16 @@ uint64_t cpu_run(Cpu *c, uint64_t max_steps) {
                 c->mmio_has[c->timer_status_off] = 1;
             }
         }
+        /* service a pending FIQ (higher priority than IRQ, no nesting) */
+        if (c->fiq_en && c->fiq_pending && !c->in_fiq) {
+            c->fiq_pending = 0;
+            push(c, c->r[PC], SP); push(c, c->r[SR], SP);
+            c->r[PC] = (uint16_t)(c->fiq_vec & 0xffff);
+            c->r[SR] &= 0xffc0;
+            c->in_fiq = 1; c->irq_taken++;
+        }
         /* service a pending IRQ (if enabled and not already in one) */
-        if (c->irq_en && c->irq_pending && !c->in_irq) {
+        if (c->irq_en && c->irq_pending && !c->in_irq && !c->in_fiq) {
             int line = 0;
             while (line < 8 && !(c->irq_pending & (1u << line))) line++;
             if (line < 8) {

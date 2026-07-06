@@ -755,3 +755,13 @@ in `cpu_reset` (it's a fixed SRAM trampoline table). Now `raise_irq(5)` vectors 
 the frame handler 0x08f23f, and `frame_tick()` uses the proper vectored path (no more
 manual stack-poke workaround). Verified: raise_irq(5) → 0x08f23f → 0x06d416 (event post),
 and the heartbeat drives the live display pipeline as before.
+
+## §25 — FIQ dispatch implemented (core correctness)
+
+The core had `fiq_en`/`secbank` but **no FIQ service** — fast interrupts never dispatched.
+Added `cpu_raise_fiq` + FIQ service in `cpu_run` (higher priority than IRQ, no nesting,
+vectors to `fiq_vec`=0x6fec, RETI clears `in_fiq`). Verified: `raise_fiq()` vectors cleanly
+into the FIQ handler 0x08f1df and the firmware stays stable. Honest note: the two FIQ
+handlers are an empty stub (0x08f1dc) and a 0x78a1 fast-timer reader (0x08f1df) — driving
+it does **not** trigger the eye animation, so this is a correctness fix, not the behavior
+trigger (that remains the open behavior-state-machine RE from §22–§24).
